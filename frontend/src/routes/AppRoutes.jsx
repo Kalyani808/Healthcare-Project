@@ -1,0 +1,67 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import PublicLayout from '../layouts/PublicLayout';
+import DashboardLayout from '../layouts/DashboardLayout';
+
+import LandingPage from '../pages/public/LandingPage';
+import AboutPage from '../pages/public/AboutPage';
+import ServicesPage from '../pages/public/ServicesPage';
+import ContactPage from '../pages/public/ContactPage';
+import LoginPage from '../pages/public/LoginPage';
+import RegisterPage from '../pages/public/RegisterPage';
+import NotFoundPage from '../pages/public/NotFoundPage';
+
+import PatientDashboard from '../pages/patient/PatientDashboard';
+import PatientProfile from '../pages/patient/PatientProfile';
+import UploadDocument from '../pages/patient/UploadDocument';
+import DocumentHistory from '../pages/patient/DocumentHistory';
+import AIChatAssistant from '../pages/patient/AIChatAssistant';
+import AppointmentsPage from '../pages/patient/AppointmentsPage';
+import HealthReportsPage from '../pages/patient/HealthReportsPage';
+
+import DoctorDashboard from '../pages/doctor/DoctorDashboard';
+import DoctorProfile from '../pages/doctor/DoctorProfile';
+import PatientList from '../pages/doctor/PatientList';
+import AppointmentManagement from '../pages/doctor/AppointmentManagement';
+
+const AppRoutes = () => {
+  return (
+    <Routes>
+      {/* Public Pages */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/services" element={<ServicesPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+      </Route>
+
+      {/* Patient Workspace */}
+      <Route path="/patient" element={<DashboardLayout />}>
+        <Route index element={<Navigate to="/patient/dashboard" replace />} />
+        <Route path="dashboard" element={<PatientDashboard />} />
+        <Route path="profile" element={<PatientProfile />} />
+        <Route path="upload-document" element={<UploadDocument />} />
+        <Route path="document-history" element={<DocumentHistory />} />
+        <Route path="ai-assistant" element={<AIChatAssistant />} />
+        <Route path="appointments" element={<AppointmentsPage />} />
+        <Route path="health-reports" element={<HealthReportsPage />} />
+      </Route>
+
+      {/* Doctor Workspace */}
+      <Route path="/doctor" element={<DashboardLayout />}>
+        <Route index element={<Navigate to="/doctor/dashboard" replace />} />
+        <Route path="dashboard" element={<DoctorDashboard />} />
+        <Route path="profile" element={<DoctorProfile />} />
+        <Route path="patients" element={<PatientList />} />
+        <Route path="appointments" element={<AppointmentManagement />} />
+      </Route>
+
+      {/* 404 Fallback */}
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+};
+
+export default AppRoutes;

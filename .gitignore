@@ -1,22 +1,37 @@
-# Python
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python cache & compiled files
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
 
-# Virtual Environment
-venv/
-backend/venv/
-
-# Database
+# Django / SQLite
 *.sqlite3
-
-# Django Media
+db.sqlite3-journal
 media/
-backend/media/
 
-# Environment variables
+# Environment files
 .env
+.env.local
 
-# VS Code
-.vscode/
-db.sqlite3
-backend/db.sqlite3
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.DS_Store
+
+# Test images & temporary files
+*.png
+*.jpg
+*.jpeg
+*.webp
+test_*.png
+rx_*.png
+med_test_*.png
+celery_test_*.png

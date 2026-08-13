@@ -26,6 +26,9 @@ frontend/dist/
 frontend/build/
 .DS_Store
 
+# VSCode settings
+.vscode/
+
 # Test images & temporary files
 *.png
 *.jpg

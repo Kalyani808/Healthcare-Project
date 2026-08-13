@@ -4,7 +4,7 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Modal from '../../components/common/Modal';
 import api from '../../api/axios';
-import { FaHistory, FaSearch, FaFilter, FaFileAlt, FaEye, FaDownload, FaTrashAlt, FaCheckCircle } from 'react-icons/fa';
+import { FaHistory, FaSearch, FaFilter, FaEye, FaTrashAlt } from 'react-icons/fa';
 
 const DocumentHistory = () => {
   const [search, setSearch] = useState('');

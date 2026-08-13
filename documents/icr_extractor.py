@@ -1,6 +1,5 @@
 import os
 import time
-import math
 import numpy as np
 import cv2
 from PIL import Image
@@ -199,7 +198,7 @@ class PrescriptionICR:
             raise ValueError(f"Cannot read image file or invalid format: {image_path}")
 
         # Step 3: Preprocess image
-        original_img, enhanced_img, thresh_img = preprocess_image(img)
+        original_img, enhanced_img, _ = preprocess_image(img)
 
         # Step 4: Run EasyOCR on actual image
         results_enhanced = self.reader.readtext(enhanced_img)

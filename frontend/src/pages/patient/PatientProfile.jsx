@@ -5,7 +5,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
-import { FaUser, FaPhone, FaCalendarAlt, FaLanguage, FaPhoneAlt, FaSave, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaUser, FaPhone, FaCalendarAlt, FaPhoneAlt, FaSave, FaMapMarkerAlt } from 'react-icons/fa';
 
 const PatientProfile = () => {
   const { user, updateUser } = useAuth();

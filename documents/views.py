@@ -4,9 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import MedicalDocument
 from .serializers import MedicalDocumentSerializer
-from .icr_extractor import PrescriptionICR, assess_image_quality
-from .icr_processor import extract_medicines_only, extract_medicines_with_ollama_fallback
-from .tasks import extract_text_task
+from .icr_extractor import assess_image_quality
+from .icr_processor import extract_medicines_with_ollama_fallback
 
 
 class MedicalDocumentViewSet(viewsets.ModelViewSet):

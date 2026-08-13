@@ -4,7 +4,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
-import { FaFileUpload, FaCloudUploadAlt, FaRobot, FaTimes, FaTable, FaEye, FaDownload, FaPills, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaCloudUploadAlt, FaTimes, FaTable, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
 const UploadDocument = () => {
   const [file, setFile] = useState(null);

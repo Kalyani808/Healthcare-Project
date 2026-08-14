@@ -35,6 +35,13 @@ const UploadDocument = () => {
     e.preventDefault();
     if (!file) return;
 
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      alert('Authentication required. Please log in to upload and extract medical prescriptions.');
+      window.location.href = '/login';
+      return;
+    }
+
     setUploading(true);
     setProgress(20);
 
@@ -93,7 +100,14 @@ const UploadDocument = () => {
     } catch (err) {
       console.error('Failed to process prescription image:', err);
       setUploading(false);
-      alert('Extraction failed: ' + (err.response?.data?.error || err.message));
+      if (err.response?.status === 401) {
+        alert('Your login session has expired or is invalid. Please log in again to upload prescriptions.');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
+      } else {
+        alert('Extraction failed: ' + (err.response?.data?.detail || err.response?.data?.error || err.message));
+      }
     }
   };
 
@@ -108,6 +122,13 @@ const UploadDocument = () => {
           <p className="text-slate-500 text-xs">Upload prescription images for instant AI medicine extraction & regional care guidance</p>
         </div>
       </div>
+
+      {!localStorage.getItem('access_token') && (
+        <Alert
+          type="warning"
+          message="⚠️ You are currently browsing as a guest. Please Log In or Register Free to run AI medicine extraction."
+        />
+      )}
 
       {/* Equal 50/50 Grid Container */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -97,12 +97,14 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
         print(f"[ICR OUTPUT] Raw text (first 200 chars): {extracted_str[:200]}")
 
-        medicines_data, method = extract_medicines_with_ollama_fallback(extracted_str)
+        medicines_data, method, audio_script = extract_medicines_with_ollama_fallback(extracted_str)
         print(f"[{method.upper()} RESULT] Found {len(medicines_data)} medicines")
         for med in medicines_data:
-            print(f"  - {med.get('medicine')}: {med.get('dosage')} (confidence: {med.get('confidence')})")
+            print(f"  - {med.get('name') or med.get('medicine')}: strength={med.get('strength')}, freq={med.get('frequency')}, duration={med.get('duration')} (confidence: {med.get('confidence')})")
 
-        medicines_only_strings = [item.get("raw_line") or item.get("medicine") for item in medicines_data]
+        medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in medicines_data]
+
+        avg_conf = float(sum(m.get('confidence', 0.8) for m in medicines_data) / len(medicines_data)) if medicines_data else 0.40
 
         return Response(
             {
@@ -111,11 +113,12 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 "medicines_found": len(medicines_data),
                 "medicines": medicines_data,
                 "medicines_only": medicines_only_strings,
+                "audio_script": audio_script,
                 "extraction_method": method,
                 "quality_metrics": quality_metrics,
                 "image_quality": quality_metrics.get("image_quality", "medium"),
                 "quality_reason": quality_metrics.get("reason", ""),
-                "confidence": 0.88 if len(medicines_data) > 0 else 0.40,
+                "confidence": round(avg_conf, 2),
                 "num_lines": len(medicines_data),
                 "lines": [{"text": m} for m in medicines_only_strings],
                 "text": extracted_str,

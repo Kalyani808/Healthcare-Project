@@ -197,29 +197,29 @@ class PrescriptionICR:
         if img is None:
             raise ValueError(f"Cannot read image file or invalid format: {image_path}")
 
+        h, w = img.shape[:2]
+        print(f"[ICR] Image dimensions: {w}x{h}")
+
         # Step 3: Preprocess image
         original_img, enhanced_img, _ = preprocess_image(img)
+        handwritten_img = preprocess_handwritten_image(img)
+        print(f"[ICR] Preprocessing completed")
 
-        # Step 4: Run EasyOCR on actual image
+        # Step 4: Multi-pass EasyOCR reading
         results_enhanced = self.reader.readtext(enhanced_img)
         results_original = self.reader.readtext(original_img)
+        results_handwritten = self.reader.readtext(handwritten_img) if handwritten_img is not None else []
 
-        # Step 4b: Handwritten specialized preprocessing pass if initial results are sparse
-        results_handwritten = []
-        if len(results_enhanced) < 2 and len(results_original) < 2:
-            handwritten_img = preprocess_handwritten_image(img)
-            if handwritten_img is not None:
-                results_handwritten = self.reader.readtext(handwritten_img)
-
-        candidates_list = [results_enhanced, results_original, results_handwritten]
-        combined_results = max(candidates_list, key=len)
+        # Merge results prioritizing longest line recall & highest overall confidence
+        all_passes = [results_enhanced, results_original, results_handwritten]
+        best_pass = max(all_passes, key=lambda pass_res: (len(pass_res), sum(item[2] for item in pass_res)))
 
         lines_output = []
         full_text_parts = []
         confidences = []
 
-        # Step 5: Extract real text from results
-        for bbox, text, prob in combined_results:
+        # Step 5: Process extracted OCR lines
+        for bbox, text, prob in best_pass:
             clean_text = text.strip()
             if not clean_text:
                 continue
@@ -235,17 +235,16 @@ class PrescriptionICR:
             full_text_parts.append(clean_text)
             confidences.append(conf)
 
-        extracted_text = " ".join(full_text_parts)
+        # CRITICAL: Preserve line breaks '\n' so multi-medicine lines remain separate!
+        extracted_text = "\n".join(full_text_parts)
         processing_time = round(time.time() - start_time, 2)
         overall_confidence = round(float(np.mean(confidences)), 4) if confidences else 0.0
         handwritten_detected = is_handwritten(lines_output)
         requires_manual_review = overall_confidence < 0.80
 
-        # Step 6: Warning if no text extracted
-        if not extracted_text.strip():
-            print(f"[ICR WARNING] No text extracted from {image_path}")
-
-        print(f"[ICR SUCCESS] Extracted: {extracted_text[:100]}... (Lines: {len(lines_output)}, Confidence: {overall_confidence})")
+        print(f"[ICR] OCR completed in {processing_time}s")
+        print(f"[ICR] Extracted text length: {len(extracted_text)} chars ({len(lines_output)} lines)")
+        print(f"[ICR RAW TEXT]:\n{extracted_text}\n--- END ICR RAW TEXT ---")
 
         return {
             "document_id": document_id,

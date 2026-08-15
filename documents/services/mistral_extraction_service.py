@@ -70,7 +70,7 @@ RAW PRESCRIPTION OCR TEXT:
 """
 
             try:
-                client = ollama.Client(host=self.base_url, timeout=12.0)
+                client = ollama.Client(host=self.base_url, timeout=120.0)
                 response = client.chat(
                     model=model_name,
                     messages=[{'role': 'user', 'content': prompt}],

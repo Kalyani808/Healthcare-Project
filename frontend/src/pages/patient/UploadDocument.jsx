@@ -25,6 +25,10 @@ const UploadDocument = () => {
   const [isPausedAudio, setIsPausedAudio] = useState(false);
   const [audioLang, setAudioLang] = useState('en-US');
 
+  const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
+  const [inlineError, setInlineError] = useState(null);
+  const [activeDocId, setActiveDocId] = useState(null);
+
   useEffect(() => {
     return () => {
       if ('speechSynthesis' in window) {
@@ -32,6 +36,37 @@ const UploadDocument = () => {
       }
     };
   }, []);
+
+  const checkDocStatusManually = async (docIdToPoll) => {
+    const id = docIdToPoll || activeDocId;
+    if (!id) return;
+    try {
+      const statusRes = await api.get(`/api/documents/${id}/extraction-status/`);
+      const statusData = statusRes.data;
+      if (statusData.status === 'complete') {
+        setUploading(false);
+        setIsExtendedProcessing(false);
+        setInlineError(null);
+        setAnalyzed({
+          extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
+          medicines: statusData.medicines || [],
+          medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
+          audio_script: statusData.audio_script || '',
+          audio_scripts: statusData.audio_scripts || null,
+          confidence: statusData.confidence || 0.88,
+          extraction_method: statusData.extraction_method || 'ollama_mistral_json',
+          quality_metrics: statusData.quality_metrics || {},
+          requires_review: statusData.requires_manual_review,
+        });
+      } else if (statusData.status === 'failed') {
+        setUploading(false);
+        setIsExtendedProcessing(false);
+        setInlineError(statusData.error_message || statusData.error || 'Extraction failed on local engine.');
+      }
+    } catch (e) {
+      console.error('Manual status check error:', e);
+    }
+  };
 
   const getAudioScriptForSelectedLang = () => {
     if (!analyzed) return '';
@@ -94,17 +129,14 @@ const UploadDocument = () => {
   };
 
   const handleFileChange = (e) => {
-    const selected = e.target.files[0];
-    if (selected) {
-      if (!selected.type.startsWith('image/')) {
-        alert('Please select an image file (.png, .jpg, .jpeg) for medical prescription parsing.');
-        return;
-      }
-      setFile(selected);
-      setPreview(URL.createObjectURL(selected));
-      if (!docName) {
-        setDocName(selected.name.replace(/\.[^/.]+$/, ""));
-      }
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setPreview(URL.createObjectURL(selectedFile));
+      setDocName(selectedFile.name.replace(/\.[^/.]+$/, ''));
+      setAnalyzed(null);
+      setInlineError(null);
+      setIsExtendedProcessing(false);
     }
   };
 
@@ -112,42 +144,32 @@ const UploadDocument = () => {
     e.preventDefault();
     if (!file) return;
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      alert('Authentication required. Please log in to upload and extract medical prescriptions.');
-      window.location.href = '/login';
-      return;
-    }
-
     setUploading(true);
-    setProgress(15);
-    setStageText('Stage 1: Uploading prescription...');
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setProgress(20);
+    setStageText('Stage 1: Uploading prescription image...');
+    setInlineError(null);
+    setIsExtendedProcessing(false);
 
     const formData = new FormData();
-    formData.append('document_name', docName || file.name);
-    formData.append('document_type', 'image');
+    formData.append('document_name', docName || 'Prescription Document');
     formData.append('file', file);
 
     try {
-      // Step 1: Upload document
       const response = await api.post('/api/documents/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       const docId = response.data.id;
+      setActiveDocId(docId);
       setProgress(40);
-      setStageText('Stage 2: GLM-OCR Reading prescription image...');
+      setStageText('Stage 2: GLM-OCR Vision reading prescription image...');
 
-      // Step 2: Trigger background OCR task (returns 202 Accepted)
       await api.post(`/api/documents/${docId}/extract-text/`);
       setProgress(60);
-      setStageText('Stage 3: Mistral 7B Extracting structured medicines...');
+      setStageText('Stage 3: Mistral 7B extracting structured medicine records...');
 
-      // Step 3: Poll GET /api/documents/{id}/extraction-status/ until complete (Max 10 attempts = 20s)
+      // Poll up to 90 seconds (45 attempts @ 2s interval) without annoying popups
       let pollCount = 0;
-      const maxPollAttempts = 10;
+      const maxPollAttempts = 45;
 
       const pollInterval = setInterval(async () => {
         pollCount += 1;
@@ -160,6 +182,7 @@ const UploadDocument = () => {
             setProgress(100);
             setStageText('Stage 4: Extraction complete');
             setUploading(false);
+            setIsExtendedProcessing(false);
 
             setAnalyzed({
               extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
@@ -176,35 +199,35 @@ const UploadDocument = () => {
           } else if (statusData.status === 'failed') {
             clearInterval(pollInterval);
             setUploading(false);
-            const detailErr = statusData.error_message || statusData.error || 'Ollama is not running or the required local model is unavailable.';
-            alert('Prescription OCR extraction failed: ' + detailErr);
+            setIsExtendedProcessing(false);
+            setInlineError(statusData.error_message || statusData.error || 'Local Ollama vision/LLM extraction failed.');
           } else if (pollCount >= maxPollAttempts) {
             clearInterval(pollInterval);
             setUploading(false);
-            alert('Extraction polling timed out after 20 seconds. Please refresh or retry uploading.');
+            setIsExtendedProcessing(true);
           } else {
-            setProgress((prev) => Math.min(prev + 10, 95));
+            setProgress((prev) => Math.min(prev + 5, 95));
           }
         } catch (pollErr) {
-          console.error('Polling error:', pollErr);
+          console.error('Polling status error:', pollErr);
           if (pollCount >= maxPollAttempts) {
             clearInterval(pollInterval);
             setUploading(false);
-            alert('Extraction network error occurred while polling status.');
+            setIsExtendedProcessing(true);
           }
         }
       }, 2000);
 
     } catch (err) {
-      console.error('Failed to process prescription image:', err);
+      console.error('Upload error:', err);
       setUploading(false);
       if (err.response?.status === 401) {
-        alert('Your login session has expired or is invalid. Please log in again to upload prescriptions.');
+        setInlineError('Session expired. Please log in again.');
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login';
       } else {
-        alert('Extraction failed: ' + (err.response?.data?.detail || err.response?.data?.error || err.message));
+        setInlineError('Upload error: ' + (err.response?.data?.detail || err.response?.data?.error || err.message));
       }
     }
   };
@@ -287,6 +310,28 @@ const UploadDocument = () => {
                   </div>
                 )}
               </div>
+
+              {/* Inline Error Banner */}
+              {inlineError && (
+                <Alert type="error" message={inlineError} className="text-xs" />
+              )}
+
+              {/* Extended Processing Non-Blocking Banner */}
+              {isExtendedProcessing && !analyzed && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
+                  <div className="flex items-center space-x-2 font-bold">
+                    <FaInfoCircle className="text-amber-600 text-sm flex-shrink-0" />
+                    <span>Still processing, this can take a bit longer for handwritten prescriptions.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => checkDocStatusManually()}
+                    className="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-all text-xs"
+                  >
+                    Check Status Again
+                  </button>
+                </div>
+              )}
 
               {/* Simple Processing Indicator */}
               {uploading && (

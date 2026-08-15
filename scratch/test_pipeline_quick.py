@@ -11,7 +11,7 @@ from documents.services.medicine_info_service import MedicineInfoService
 from documents.services.audio_service import AudioService
 
 def main():
-    img_path = os.path.join(BASE_DIR, 'media', 'medical_documents', '2026', '08', 'rx_printed.png')
+    img_path = os.path.join(BASE_DIR, 'media', 'medical_documents', 'test_psychiatric_prescription.jpg')
     if not os.path.exists(img_path):
         print(f"File not found: {img_path}")
         return

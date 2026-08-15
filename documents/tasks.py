@@ -2,25 +2,25 @@ import threading
 from django.db import close_old_connections
 from celery import shared_task
 from .models import MedicalDocument
-from .icr_extractor import PrescriptionICR
+from .services.glm_ocr_service import GLMOCRService
 
 def run_extraction(document_id):
-    """Core function to execute ICR extraction on document with Django DB connection handling."""
+    """Core function to execute OCR extraction on document via GLMOCRService."""
     close_old_connections()
     try:
-        print(f"[BACKGROUND TASK] Starting ICR extraction for Document ID #{document_id}")
+        print(f"[BACKGROUND TASK] Starting OCR extraction for Document ID #{document_id}")
         document = MedicalDocument.objects.get(id=document_id)
         document.status = 'processing'
         document.save()
 
-        icr = PrescriptionICR()
-        result = icr.extract_text(document.file.path, document_id=document.id)
+        ocr_service = GLMOCRService()
+        result = ocr_service.extract_text_from_image(document.file.path)
 
         document.extracted_text = result['text']
         document.status = 'text_extracted'
         document.save()
 
-        print(f"[BACKGROUND TASK SUCCESS] Document ID #{document_id} extracted: {result['text'][:80]}...")
+        print(f"[BACKGROUND TASK SUCCESS] Document ID #{document_id} extracted via {result.get('method')}: {result['text'][:80]}...")
         return result
     except Exception as e:
         print(f"[BACKGROUND TASK ERROR] Document ID #{document_id}: {str(e)}")

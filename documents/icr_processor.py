@@ -256,3 +256,11 @@ def extract_medicines_with_ollama_fallback(extracted_text):
     meds, audio_script = extract_all_medicines_structured(extracted_text)
     return meds, "structured_icr_parser", audio_script
 
+
+def extract_ALL_medicines_from_prescription(full_text):
+    """
+    Alias wrapper returning all extracted candidate medicines.
+    """
+    meds, _ = extract_all_medicines_structured(full_text)
+    return meds
+

@@ -6,7 +6,7 @@ import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
 import {
   FaFileUpload, FaCloudUploadAlt, FaRobot, FaTimes, FaTable, FaEye,
-  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle
+  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
@@ -18,6 +18,7 @@ const UploadDocument = () => {
   const [stageText, setStageText] = useState('Uploading prescription...');
   const [analyzed, setAnalyzed] = useState(null);
   const [showRawDetails, setShowRawDetails] = useState(false);
+  const [showMedInfo, setShowMedInfo] = useState(true);
 
   // Audio Speech Synthesis State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -32,13 +33,23 @@ const UploadDocument = () => {
     };
   }, []);
 
-  const speakAudioScript = (textToSpeak) => {
+  const getAudioScriptForSelectedLang = () => {
+    if (!analyzed) return '';
+    if (analyzed.audio_scripts) {
+      if (audioLang.startsWith('hi')) return analyzed.audio_scripts.hi || analyzed.audio_script;
+      if (audioLang.startsWith('mr')) return analyzed.audio_scripts.mr || analyzed.audio_script;
+      return analyzed.audio_scripts.en || analyzed.audio_script;
+    }
+    return analyzed.audio_script || '';
+  };
+
+  const speakAudioScript = () => {
     if (!('speechSynthesis' in window)) {
       alert('Text-to-speech is not supported in your browser.');
       return;
     }
     window.speechSynthesis.cancel();
-    const script = textToSpeak || analyzed?.audio_script || '';
+    const script = getAudioScriptForSelectedLang();
     if (!script) return;
 
     const utterance = new SpeechSynthesisUtterance(script);
@@ -127,12 +138,12 @@ const UploadDocument = () => {
       });
       const docId = response.data.id;
       setProgress(40);
-      setStageText('Stage 2: Reading multi-pass ICR text...');
+      setStageText('Stage 2: GLM-OCR Reading prescription image...');
 
-      // Step 2: Trigger background ICR task (returns 202 Accepted)
+      // Step 2: Trigger background OCR task (returns 202 Accepted)
       await api.post(`/api/documents/${docId}/extract-text/`);
       setProgress(60);
-      setStageText('Stage 3: Extracting ALL detected medicines...');
+      setStageText('Stage 3: Mistral 7B Extracting structured medicines...');
 
       // Step 3: Poll GET /api/documents/{id}/extraction-status/ until complete
       const pollInterval = setInterval(async () => {
@@ -143,7 +154,7 @@ const UploadDocument = () => {
           if (statusData.status === 'complete') {
             clearInterval(pollInterval);
             setProgress(100);
-            setStageText('Stage 4: Medicines detected & Audio ready');
+            setStageText('Stage 4: Extraction complete');
             setUploading(false);
 
             setAnalyzed({
@@ -151,7 +162,9 @@ const UploadDocument = () => {
               medicines: statusData.medicines || [],
               medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
               audio_script: statusData.audio_script || '',
+              audio_scripts: statusData.audio_scripts || null,
               confidence: statusData.confidence || 0.88,
+              extraction_method: statusData.extraction_method || 'ollama_mistral_json',
               quality_metrics: statusData.quality_metrics || {},
               requires_review: statusData.requires_manual_review,
               db_doc: response.data,
@@ -159,7 +172,7 @@ const UploadDocument = () => {
           } else if (statusData.status === 'failed') {
             clearInterval(pollInterval);
             setUploading(false);
-            alert('ICR text extraction failed: ' + (statusData.error || 'Unknown error'));
+            alert('Prescription OCR extraction failed: ' + (statusData.error || 'Ollama is not running or the required local model is unavailable.'));
           } else {
             setProgress((prev) => Math.min(prev + 10, 95));
           }
@@ -190,7 +203,7 @@ const UploadDocument = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Upload Medical Document</h1>
-          <p className="text-slate-500 text-xs">Upload prescription images for instant AI medicine extraction & regional care guidance</p>
+          <p className="text-slate-500 text-xs">Upload prescription images for 100% local offline AI medicine extraction (GLM-OCR + Mistral 7B)</p>
         </div>
       </div>
 
@@ -206,7 +219,7 @@ const UploadDocument = () => {
 
         {/* LEFT SIDE (50% Width Container) */}
         <div className="lg:col-span-1 space-y-4">
-          <Card className="h-[540px] flex flex-col justify-between space-y-4 overflow-hidden">
+          <Card className="h-[560px] flex flex-col justify-between space-y-4 overflow-hidden">
             <form onSubmit={handleUpload} className="h-full flex flex-col justify-between space-y-3">
 
               <div className="space-y-3">
@@ -219,13 +232,13 @@ const UploadDocument = () => {
                 />
 
                 {!preview ? (
-                  <label className="border-2 border-dashed border-health-200 hover:border-health-400 bg-health-50/30 hover:bg-health-50 rounded-2xl h-[280px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-4">
+                  <label className="border-2 border-dashed border-health-200 hover:border-health-400 bg-health-50/30 hover:bg-health-50 rounded-2xl h-[290px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-4">
                     <div className="w-16 h-16 rounded-2xl bg-health-100 text-health-600 flex items-center justify-center text-3xl">
                       <FaCloudUploadAlt />
                     </div>
                     <div className="text-center space-y-1">
                       <p className="text-sm font-semibold text-slate-700">Click to select prescription image</p>
-                      <p className="text-xs text-slate-400">Supports PNG, JPG, JPEG (Max 10MB)</p>
+                      <p className="text-xs text-slate-400">Supports PNG, JPG, JPEG (100% Offline Local Processing)</p>
                     </div>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                   </label>
@@ -241,11 +254,11 @@ const UploadDocument = () => {
                         <FaTimes /> <span>Remove File</span>
                       </button>
                     </div>
-                    <div className="relative bg-slate-900/5 rounded-2xl border border-slate-200 h-[280px] flex items-center justify-center p-2 overflow-hidden group">
+                    <div className="relative bg-slate-900/5 rounded-2xl border border-slate-200 h-[290px] flex items-center justify-center p-2 overflow-hidden group">
                       <img
                         src={preview}
                         alt="Prescription Preview"
-                        className="max-h-[260px] max-w-full object-contain rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-105"
+                        className="max-h-[270px] max-w-full object-contain rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-105"
                       />
                       <a
                         href={preview}
@@ -291,7 +304,7 @@ const UploadDocument = () => {
 
         {/* RIGHT SIDE (50% Width Container) */}
         <div className="lg:col-span-1 space-y-4">
-          <Card className={`h-[540px] flex flex-col justify-between ${analyzed ? 'border-mint-200 bg-mint-50/10' : 'bg-slate-50 border-slate-100'}`}>
+          <Card className={`h-[560px] flex flex-col justify-between ${analyzed ? 'border-mint-200 bg-mint-50/10' : 'bg-slate-50 border-slate-100'}`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <div className="flex items-center space-x-2 text-slate-800 font-bold text-base">
                 <FaRobot className="text-tealSoft-500 text-xl" />
@@ -309,28 +322,29 @@ const UploadDocument = () => {
               <div className="my-auto py-16 text-center text-slate-400 space-y-3">
                 <FaTable className="text-4xl mx-auto opacity-40 text-tealSoft-400" />
                 <p className="text-sm font-medium text-slate-600">Upload prescription image on left panel</p>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">ALL detected medicine names, strengths, dosages, and audio summaries will appear here instantly.</p>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto">GLM-OCR & Mistral 7B will extract ALL medicine entries, strengths, dosages, and audio summaries locally via Ollama.</p>
               </div>
             ) : (
               <div className="flex-1 flex flex-col justify-between pt-2 space-y-2.5 overflow-hidden">
 
-                {/* Confidence Badge */}
+                {/* Confidence & Model Badge */}
                 {analyzed.confidence >= 0.75 ? (
-                  <Alert type="success" message={`✓ Multi-Pass Vision High Recall (${(analyzed.confidence * 100).toFixed(0)}%) — Candidates identified.`} />
+                  <Alert type="success" message={`✓ Local AI High Confidence (${(analyzed.confidence * 100).toFixed(0)}%) — Extracted via ${analyzed.extraction_method || 'GLM-OCR + Mistral'}.`} />
                 ) : (
-                  <Alert type="warning" message={`⚠️ Multi-Pass Vision Recall (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify candidate items.`} />
+                  <Alert type="warning" message={`⚠️ Local AI Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify candidate items with doctor.`} />
                 )}
 
                 {/* DETECTED MEDICINES PANEL */}
-                <div className="flex-1 overflow-y-auto pr-1 space-y-2 max-h-[260px]">
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2 max-h-[250px]">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
                     <span>ALL DETECTED MEDICINES ({analyzed.medicines?.length || 0})</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Parsed directly from text</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Parsed via Mistral 7B</span>
                   </h4>
 
                   {analyzed.medicines && analyzed.medicines.length > 0 ? (
                     analyzed.medicines.map((med, idx) => {
-                      const confPct = med.confidence ? Math.round(med.confidence * 100) : 75;
+                      const confPct = med.confidence ? Math.round(med.confidence * 100) : 85;
+                      const confLabel = med.confidence_label || (confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Needs verification');
                       const isHigh = confPct >= 75;
                       const isMedium = confPct >= 50 && confPct < 75;
 
@@ -346,25 +360,18 @@ const UploadDocument = () => {
                           }`}
                         >
                           <div className="flex items-center justify-between font-bold text-slate-800 text-sm">
-                            <span className="text-slate-900 font-bold">{idx + 1}. {med.name || med.medicine}</span>
-                            <div className="flex items-center space-x-1">
-                              {med.strength && (
-                                <span className="text-[11px] font-bold text-mint-800 bg-mint-100 px-2 py-0.5 rounded-md">
-                                  {med.strength}
-                                </span>
-                              )}
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isHigh
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : isMedium
-                                    ? 'bg-amber-100 text-amber-900'
-                                    : 'bg-orange-100 text-orange-900'
-                                }`}
-                              >
-                                {confPct}% {isHigh ? 'High' : isMedium ? 'Medium' : 'Possible'}
-                              </span>
-                            </div>
+                            <span className="text-slate-900 font-bold">{idx + 1}. {med.name || med.medicine} {med.strength}</span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                isHigh
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : isMedium
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-orange-100 text-orange-900'
+                              }`}
+                            >
+                              {confPct}% {confLabel}
+                            </span>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -378,6 +385,11 @@ const UploadDocument = () => {
                                 Duration: {med.duration}
                               </span>
                             )}
+                            {med.timing && (
+                              <span className="bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-100">
+                                Timing: {med.timing}
+                              </span>
+                            )}
                             {med.verification_warning && (
                               <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md flex items-center space-x-1">
                                 <span>⚠️ {med.verification_warning}</span>
@@ -385,7 +397,7 @@ const UploadDocument = () => {
                             )}
                           </div>
 
-                          {med.info && (
+                          {showMedInfo && med.info && (
                             <div className="pt-1 text-[11px] text-slate-600 flex items-start space-x-1.5 bg-white/80 p-1.5 rounded-lg border border-slate-100">
                               <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
                               <span>{med.info}</span>
@@ -397,10 +409,11 @@ const UploadDocument = () => {
                   ) : (
                     <div className="p-4 bg-amber-50/90 rounded-2xl border border-amber-200 text-slate-700 space-y-2 text-xs">
                       <div className="flex items-center space-x-2 font-bold text-amber-900 text-sm">
-                        <span>⚠️ Could not confidently identify medicines</span>
+                        <FaExclamationTriangle className="text-amber-600" />
+                        <span>Could not identify medicines</span>
                       </div>
                       <p className="text-slate-600 leading-relaxed">
-                        Please verify the prescription manually. Try uploading a clearer, flat, well-lit photo of the prescription.
+                        Please verify that local Ollama is running (`http://localhost:11434`) and model `glm-ocr` or `mistral` is pulled.
                       </p>
                     </div>
                   )}
@@ -421,6 +434,7 @@ const UploadDocument = () => {
                       >
                         <option value="en-US">English</option>
                         <option value="hi-IN">Hindi (हिंदी)</option>
+                        <option value="mr-IN">Marathi (मराठी)</option>
                       </select>
                     </div>
 
@@ -468,19 +482,29 @@ const UploadDocument = () => {
                   </div>
                 )}
 
-                {/* Collapsible Raw OCR Text Footer */}
-                <div className="pt-1 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setShowRawDetails(!showRawDetails)}
-                    className="w-full text-xs text-slate-500 hover:text-slate-800 font-semibold flex items-center justify-between py-0.5 px-1 rounded hover:bg-slate-100 transition-colors"
-                  >
-                    <span>{showRawDetails ? 'Hide Complete OCR Text' : 'Show Complete OCR Text'}</span>
-                    {showRawDetails ? <FaChevronUp /> : <FaChevronDown />}
-                  </button>
+                {/* Collapsible Drawers Footer: [ Show OCR Text ] & [ Medicine Information ] */}
+                <div className="pt-1 border-t border-slate-100 flex flex-col space-y-1">
+                  <div className="flex items-center justify-between space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMedInfo(!showMedInfo)}
+                      className="text-[11px] text-teal-600 hover:underline font-semibold flex items-center space-x-1 px-1 py-0.5"
+                    >
+                      <FaInfoCircle className="text-xs" />
+                      <span>{showMedInfo ? 'Hide Medicine Info' : 'Medicine Information'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRawDetails(!showRawDetails)}
+                      className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold flex items-center space-x-1 px-1 py-0.5 rounded hover:bg-slate-100 transition-colors"
+                    >
+                      <span>{showRawDetails ? 'Hide OCR Text' : 'Show OCR Text'}</span>
+                      {showRawDetails ? <FaChevronUp /> : <FaChevronDown />}
+                    </button>
+                  </div>
 
                   {showRawDetails && (
-                    <div className="mt-1 p-2 bg-slate-900 text-slate-200 font-mono text-[10px] rounded-xl max-h-20 overflow-y-auto whitespace-pre-wrap">
+                    <div className="p-2 bg-slate-900 text-slate-200 font-mono text-[10px] rounded-xl max-h-24 overflow-y-auto whitespace-pre-wrap">
                       {analyzed.extracted_text}
                     </div>
                   )}

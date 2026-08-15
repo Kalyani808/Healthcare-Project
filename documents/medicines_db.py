@@ -1,79 +1,157 @@
-# Comprehensive Database of Indian & International Medicines with Aliases/Brand Names
+# Comprehensive Database of Indian & International Medicines with Aliases & Clinical Benefits
 
-MEDICINE_DATABASE = {
-    # Pain Relief & Analgesics
-    "Paracetamol": ["Paracetamol", "Acetaminophen", "Crocin", "Dolo", "Dolo 650", "Calpol", "Metacin", "Pacimol", "Sumo"],
-    "Ibuprofen": ["Ibuprofen", "Brufen", "Combiflam", "Ibugesic", "Ibugesic-Plus"],
-    "Aspirin": ["Aspirin", "Ecosprin", "Disprin", "Delisprin"],
-    "Aceclofenac": ["Aceclofenac", "Zerodol", "Zerodol-P", "Zerodol-SP", "Hifenac"],
-    "Diclofenac": ["Diclofenac", "Voveran", "Voveran-SR", "Reaction"],
-    "Mefenamic Acid": ["Mefenamic Acid", "Meftal", "Meftal-Spas", "Cyclopam"],
-    "Tramadol": ["Tramadol", "Ultram", "Tramazac", "Contramal"],
-    "Nimesulide": ["Nimesulide", "Nise", "Nicip"],
+COMPREHENSIVE_MEDICINE_DATABASE = {
+    "Paracetamol": {
+        "aliases": ["Paracetamol", "Acetaminophen", "Crocin", "Dolo", "Dolo 650", "Calpol", "Metacin", "Pacimol", "Sumo"],
+        "benefits": "Commonly used for effective pain relief and fever reduction."
+    },
+    "Ibuprofen": {
+        "aliases": ["Ibuprofen", "Brufen", "Combiflam", "Ibugesic", "Ibugesic-Plus"],
+        "benefits": "Non-steroidal anti-inflammatory drug (NSAID) for pain, swelling, and fever relief."
+    },
+    "Aspirin": {
+        "aliases": ["Aspirin", "Ecosprin", "Disprin", "Delisprin"],
+        "benefits": "Blood thinner and pain reliever that reduces inflammation and cardiovascular clot risk."
+    },
+    "Aceclofenac": {
+        "aliases": ["Aceclofenac", "Zerodol", "Zerodol-P", "Zerodol-SP", "Hifenac"],
+        "benefits": "Relieves acute pain, joint stiffness, and tissue inflammation."
+    },
+    "Diclofenac": {
+        "aliases": ["Diclofenac", "Voveran", "Voveran-SR", "Reaction"],
+        "benefits": "Potent anti-inflammatory medicine for joint pain, arthritis, and muscle sprains."
+    },
+    "Mefenamic Acid": {
+        "aliases": ["Mefenamic Acid", "Meftal", "Meftal-Spas", "Cyclopam"],
+        "benefits": "Relieves abdominal cramps, spasmodic pain, and menstrual discomfort."
+    },
+    "Tramadol": {
+        "aliases": ["Tramadol", "Ultram", "Tramazac", "Contramal"],
+        "benefits": "Opioid analgesic for moderate to severe post-surgical or chronic pain."
+    },
+    "Nimesulide": {
+        "aliases": ["Nimesulide", "Nise", "Nicip"],
+        "benefits": "Fast-acting pain reliever for acute inflammatory pain."
+    },
 
-    # Antibiotics & Anti-Infectives
-    "Amoxicillin": ["Amoxicillin", "Amoxil", "Augmentin", "Clavam", "Moxikind", "Novamox", "Amoxyclav"],
-    "Azithromycin": ["Azithromycin", "Azee", "Zithromax", "Azithro", "Azithral"],
-    "Ciprofloxacin": ["Ciprofloxacin", "Cipla", "Ciprox", "Ciplox", "Cifran"],
-    "Ofloxacin": ["Ofloxacin", "Oflox", "Zenflox", "Tarivid"],
-    "Metronidazole": ["Metronidazole", "Flagyl", "Metrogyl"],
-    "Cefixime": ["Cefixime", "Zifi", "Taxim-O", "Cephalkem"],
-    "Ceftriaxone": ["Ceftriaxone", "Monocef", "Taxim"],
-    "Doxycycline": ["Doxycycline", "Doxt", "Doxypal"],
-    "Erythromycin": ["Erythromycin", "Althrocin"],
-    "Clarithromycin": ["Clarithromycin", "Claribid"],
+    "Amoxicillin": {
+        "aliases": ["Amoxicillin", "Amoxil", "Augmentin", "Clavam", "Moxikind", "Novamox", "Amoxyclav"],
+        "benefits": "Broad-spectrum penicillin antibiotic used to treat chest, throat, ear, and skin bacterial infections."
+    },
+    "Azithromycin": {
+        "aliases": ["Azithromycin", "Azee", "Zithromax", "Azithro", "Azithral"],
+        "benefits": "Broad-spectrum macrolide antibiotic taken for respiratory, throat, or skin infections."
+    },
+    "Ciprofloxacin": {
+        "aliases": ["Ciprofloxacin", "Cipla", "Ciprox", "Ciplox", "Cifran"],
+        "benefits": "Fluoroquinolone antibiotic for urinary tract, gastrointestinal, and chest infections."
+    },
+    "Ofloxacin": {
+        "aliases": ["Ofloxacin", "Oflox", "Zenflox", "Tarivid"],
+        "benefits": "Antibiotic for bacterial infections of the gut, throat, and urinary system."
+    },
+    "Metronidazole": {
+        "aliases": ["Metronidazole", "Flagyl", "Metrogyl"],
+        "benefits": "Anti-protozoal and anaerobic antibiotic for stomach, intestinal, and dental infections."
+    },
+    "Cefixime": {
+        "aliases": ["Cefixime", "Zifi", "Taxim-O", "Cephalkem"],
+        "benefits": "Cephalosporin antibiotic for throat, ear, typhoid, and urinary tract infections."
+    },
+    "Ceftriaxone": {
+        "aliases": ["Ceftriaxone", "Monocef", "Taxim"],
+        "benefits": "Injectable cephalosporin antibiotic for severe bacterial infections."
+    },
+    "Doxycycline": {
+        "aliases": ["Doxycycline", "Doxt", "Doxypal"],
+        "benefits": "Tetracycline antibiotic for respiratory, skin, and vector-borne infections."
+    },
+    "Erythromycin": {
+        "aliases": ["Erythromycin", "Althrocin"],
+        "benefits": "Antibiotic treatment for skin and chest bacterial infections."
+    },
+    "Clarithromycin": {
+        "aliases": ["Clarithromycin", "Claribid"],
+        "benefits": "Macrolide antibiotic for respiratory tract and stomach infections."
+    },
 
-    # Gastrointestinal & Antacids
-    "Pantoprazole": ["Pantoprazole", "Pan 40", "Pan-D", "Pantocid", "Pantosec", "Panto"],
-    "Omeprazole": ["Omeprazole", "Omez", "Nexium", "Prilosec"],
-    "Rabeprazole": ["Rabeprazole", "Rabeloc", "Rabekind", "Cyra"],
-    "Ranitidine": ["Ranitidine", "Zantac", "Aciloc", "Rantac", "Zinetac"],
-    "Ondansetron": ["Ondansetron", "Emeset", "Vomikind", "Ondem"],
-    "Domperidone": ["Domperidone", "Vomistop", "Motilium"],
-    "Sucralfate": ["Sucralfate", "Sucrafil"],
-    "Gelusil": ["Gelusil", "Gelusil-MPS", "Digene", "Cremaffin", "Mucaine"],
-    "Laxative": ["Duphalac", "Lactulose", "Cremaffin-Fresh"],
-    "Probiotic": ["Sporlac", "Enterogermina", "Vizylac"],
+    "Pantoprazole": {
+        "aliases": ["Pantoprazole", "Pan 40", "Pan-D", "Pantocid", "Pantosec", "Panto", "Pan-DSR"],
+        "benefits": "Proton pump inhibitor (PPI) that reduces excess stomach acid, GERD, and heartburn."
+    },
+    "Omeprazole": {
+        "aliases": ["Omeprazole", "Omez", "Nexium", "Prilosec"],
+        "benefits": "Decreases gastric acid production to soothe hyperacidity and stomach ulcers."
+    },
+    "Rabeprazole": {
+        "aliases": ["Rabeprazole", "Rabeloc", "Rabekind", "Cyra"],
+        "benefits": "Fast-acting acid suppressor for GERD and peptic ulcer relief."
+    },
+    "Ranitidine": {
+        "aliases": ["Ranitidine", "Zantac", "Aciloc", "Rantac", "Zinetac"],
+        "benefits": "H2-blocker that reduces stomach acid and prevents indigestion."
+    },
+    "Ondansetron": {
+        "aliases": ["Ondansetron", "Emeset", "Vomikind", "Ondem"],
+        "benefits": "Anti-emetic medicine that prevents nausea and vomiting."
+    },
+    "Domperidone": {
+        "aliases": ["Domperidone", "Vomistop", "Motilium"],
+        "benefits": "Prokinetic agent that reduces nausea and bloating."
+    },
+    "Sucralfate": {
+        "aliases": ["Sucralfate", "Sucrafil"],
+        "benefits": "Forms a protective barrier over stomach ulcers to accelerate healing."
+    },
+    "Gelusil": {
+        "aliases": ["Gelusil", "Gelusil-MPS", "Digene", "Cremaffin", "Mucaine"],
+        "benefits": "Antacid for immediate neutralisation of stomach acid and gas relief."
+    },
 
-    # Cough, Cold & Allergy
-    "Cetirizine": ["Cetirizine", "Okacet", "Zyrtec", "Cetzine"],
-    "Levocetirizine": ["Levocetirizine", "Lecope", "Montair-LC", "Levocet"],
-    "Montelukast": ["Montelukast", "Montair", "Montek"],
-    "Allegra": ["Fexofenadine", "Allegra"],
-    "Cough Syrup": ["Cough Syrup", "Benylin", "Ascoril", "Ascoril-D", "Ascoril-LS", "Benadryl", "Corex", "Alex", "Grilinctus", "Tossex", "Glycodin"],
-    "Decongestant": ["Sinarest", "Wikoryl", "Cheston", "Solvin", "Otrivin", "Nasivion"],
+    "Cetirizine": {
+        "aliases": ["Cetirizine", "Okacet", "Zyrtec", "Cetzine"],
+        "benefits": "Non-drowsy antihistamine for runny nose, sneezing, hives, and allergies."
+    },
+    "Levocetirizine": {
+        "aliases": ["Levocetirizine", "Lecope", "Montair-LC", "Levocet"],
+        "benefits": "Relieves persistent allergic rhinitis, watery eyes, and skin itching."
+    },
+    "Montelukast": {
+        "aliases": ["Montelukast", "Montair", "Montek"],
+        "benefits": "Leukotriene receptor antagonist for asthma management and allergic airway prevention."
+    },
 
-    # Diabetes Care
-    "Metformin": ["Metformin", "Glucophage", "Glycomet", "Glycomet-SR"],
-    "Glimepiride": ["Glimepiride", "Amaryl", "Glimisave"],
-    "Teneligliptin": ["Teneligliptin", "Zita", "Tenali"],
-    "Vildagliptin": ["Vildagliptin", "Galvus", "Galvus-Met"],
-    "Sitagliptin": ["Sitagliptin", "Januvia"],
-    "Dapagliflozin": ["Dapagliflozin", "Forxiga"],
-    "Insulin": ["Insulin", "Mixtard", "Lantus", "Humalog", "Novorapid"],
+    "Metformin": {
+        "aliases": ["Metformin", "Glucophage", "Glycomet", "Glycomet-SR"],
+        "benefits": "First-line oral antidiabetic medication that controls blood glucose levels in Type 2 diabetes."
+    },
+    "Glimepiride": {
+        "aliases": ["Glimepiride", "Amaryl", "Glimisave"],
+        "benefits": "Sulfonylurea anti-diabetic medication that stimulates insulin secretion."
+    },
 
-    # Blood Pressure & Heart
-    "Amlodipine": ["Amlodipine", "Norvasc", "Amlong", "Stamlo"],
-    "Telmisartan": ["Telmisartan", "Telma", "Telmikind", "Tazloc"],
-    "Metoprolol": ["Metoprolol", "Lopressor", "Metolar", "Metolar-XR"],
-    "Atenolol": ["Atenolol", "Betacard", "Tenormin"],
-    "Lisinopril": ["Lisinopril", "Prinivil", "Listril"],
-    "Ramipril": ["Ramipril", "Cardace"],
-    "Cilnidipine": ["Cilnidipine", "Cilacar"],
+    "Amlodipine": {
+        "aliases": ["Amlodipine", "Norvasc", "Amlong", "Stamlo"],
+        "benefits": "Calcium channel blocker that relaxes blood vessels to lower high blood pressure."
+    },
+    "Telmisartan": {
+        "aliases": ["Telmisartan", "Telma", "Telmikind", "Tazloc"],
+        "benefits": "Angiotensin receptor blocker (ARB) that controls blood pressure and protects heart health."
+    },
+    "Atorvastatin": {
+        "aliases": ["Atorvastatin", "Lipitor", "Stator", "Lipivas", "Atorva"],
+        "benefits": "Statin medication that lowers cholesterol and protects against heart disease."
+    },
 
-    # Cholesterol & Blood Thinners
-    "Atorvastatin": ["Atorvastatin", "Lipitor", "Stator", "Lipivas", "Atorva"],
-    "Rosuvastatin": ["Rosuvastatin", "Rosuvas", "Crestor"],
-    "Clopidogrel": ["Clopidogrel", "Clopilet", "Plavix"],
-
-    # Hydration & Rehydration
-    "ORSL": ["ORSL", "ORS", "Oral Rehydration", "Electral", "Electrolyte", "ORSL Liquid"],
-
-    # Vitamins & Supplements
-    "Vitamin C": ["Vitamin C", "Limcee", "Celin"],
-    "B-Complex": ["Becosules", "Neurobion", "Neurobion-Forte", "Cobadex"],
-    "Zinc": ["Zincovit", "Zinconia"],
-    "Calcium": ["Shelcal", "Shelcal-500", "Calcirol"],
-    "Vitamin E": ["Evion", "Evion-400"],
-    "Liver Care": ["Liv 52", "Liv52", "Liv52-DS"]
+    "Ultracit": {
+        "aliases": ["Ultracit", "Disodium Hydrogen Citrate", "Cital"],
+        "benefits": "Systemic alkalizer that neutralizes urinary acidity and relieves burning urination."
+    },
+    "ORSL": {
+        "aliases": ["ORSL", "ORS", "Oral Rehydration", "Electral", "Electrolyte"],
+        "benefits": "Restores essential electrolytes and fluids lost during diarrhea or dehydration."
+    }
 }
+
+# Backwards compatible alias map
+MEDICINE_DATABASE = {name: data["aliases"] for name, data in COMPREHENSIVE_MEDICINE_DATABASE.items()}

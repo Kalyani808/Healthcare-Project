@@ -86,6 +86,7 @@ const UploadDocument = () => {
         setAnalyzed({
           extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
           medicines: statusData.medicines || [],
+          needs_verification: statusData.needs_verification || [],
           medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
           audio_script: statusData.audio_script || '',
           audio_scripts: statusData.audio_scripts || null,
@@ -203,9 +204,9 @@ const UploadDocument = () => {
       setProgress(60);
       setStageText('Stage 3: Mistral 7B extracting structured medicine records...');
 
-      // Poll up to 90 seconds (45 attempts @ 2s interval) without annoying popups
+      // Poll up to 240 seconds (120 attempts @ 2s interval) for deep handwritten prescription vision+LLM extraction
       let pollCount = 0;
-      const maxPollAttempts = 45;
+      const maxPollAttempts = 120;
 
       const pollInterval = setInterval(async () => {
         pollCount += 1;
@@ -223,6 +224,7 @@ const UploadDocument = () => {
             setAnalyzed({
               extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
               medicines: statusData.medicines || [],
+              needs_verification: statusData.needs_verification || [],
               medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
               audio_script: statusData.audio_script || '',
               audio_scripts: statusData.audio_scripts || null,
@@ -242,7 +244,7 @@ const UploadDocument = () => {
             setUploading(false);
             setIsExtendedProcessing(true);
           } else {
-            setProgress((prev) => Math.min(prev + 5, 95));
+            setProgress((prev) => Math.min(prev + 2, 95));
           }
         } catch (pollErr) {
           console.error('Polling status error:', pollErr);

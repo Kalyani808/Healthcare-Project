@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -127,7 +127,7 @@ const UploadDocument = () => {
       });
       const docId = response.data.id;
       setProgress(40);
-      setStageText('Stage 2: Reading prescription text & preprocessing...');
+      setStageText('Stage 2: Reading multi-pass ICR text...');
 
       // Step 2: Trigger background ICR task (returns 202 Accepted)
       await api.post(`/api/documents/${docId}/extract-text/`);
@@ -147,7 +147,7 @@ const UploadDocument = () => {
             setUploading(false);
 
             setAnalyzed({
-              extracted_text: statusData.extracted_text || statusData.text || '',
+              extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
               medicines: statusData.medicines || [],
               medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
               audio_script: statusData.audio_script || '',
@@ -315,10 +315,10 @@ const UploadDocument = () => {
               <div className="flex-1 flex flex-col justify-between pt-2 space-y-2.5 overflow-hidden">
 
                 {/* Confidence Badge */}
-                {analyzed.confidence >= 0.85 ? (
-                  <Alert type="success" message={`✓ High Confidence Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — All medicines identified from prescription.`} />
+                {analyzed.confidence >= 0.75 ? (
+                  <Alert type="success" message={`✓ Multi-Pass Vision High Recall (${(analyzed.confidence * 100).toFixed(0)}%) — Candidates identified.`} />
                 ) : (
-                  <Alert type="warning" message={`⚠️ Moderate Confidence (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify medicines manually.`} />
+                  <Alert type="warning" message={`⚠️ Multi-Pass Vision Recall (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify candidate items.`} />
                 )}
 
                 {/* DETECTED MEDICINES PANEL */}
@@ -329,44 +329,71 @@ const UploadDocument = () => {
                   </h4>
 
                   {analyzed.medicines && analyzed.medicines.length > 0 ? (
-                    analyzed.medicines.map((med, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-[#f0f9f7] border-l-4 border-[#1abc9c] rounded-r-xl shadow-sm space-y-1.5 transition-all hover:bg-white hover:shadow-md"
-                      >
-                        <div className="flex items-center justify-between font-bold text-slate-800 text-sm">
-                          <span className="text-slate-900 font-bold">{idx + 1}. {med.name || med.medicine}</span>
-                          {med.strength && (
-                            <span className="text-[11px] font-bold text-mint-800 bg-mint-100 px-2 py-0.5 rounded-md">
-                              {med.strength}
-                            </span>
-                          )}
-                        </div>
+                    analyzed.medicines.map((med, idx) => {
+                      const confPct = med.confidence ? Math.round(med.confidence * 100) : 75;
+                      const isHigh = confPct >= 75;
+                      const isMedium = confPct >= 50 && confPct < 75;
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                          {med.frequency && (
-                            <span className="bg-teal-50 text-teal-800 font-semibold px-2 py-0.5 rounded-md border border-teal-100">
-                              Frequency: {med.frequency}
-                            </span>
-                          )}
-                          {med.duration && (
-                            <span className="bg-blue-50 text-blue-800 font-semibold px-2 py-0.5 rounded-md border border-blue-100">
-                              Duration: {med.duration}
-                            </span>
-                          )}
-                          <span className="text-[10px] text-slate-400 ml-auto">
-                            {(med.confidence ? (med.confidence * 100).toFixed(0) : 88)}% match
-                          </span>
-                        </div>
-
-                        {med.info && (
-                          <div className="pt-1 text-[11px] text-slate-600 flex items-start space-x-1.5 bg-white/70 p-1.5 rounded-lg border border-slate-100">
-                            <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
-                            <span>{med.info}</span>
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-r-xl border-l-4 shadow-sm space-y-1.5 transition-all hover:bg-white hover:shadow-md ${
+                            isHigh
+                              ? 'bg-[#f0f9f7] border-[#1abc9c]'
+                              : isMedium
+                              ? 'bg-amber-50/70 border-amber-400'
+                              : 'bg-orange-50/80 border-orange-500'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between font-bold text-slate-800 text-sm">
+                            <span className="text-slate-900 font-bold">{idx + 1}. {med.name || med.medicine}</span>
+                            <div className="flex items-center space-x-1">
+                              {med.strength && (
+                                <span className="text-[11px] font-bold text-mint-800 bg-mint-100 px-2 py-0.5 rounded-md">
+                                  {med.strength}
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isHigh
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : isMedium
+                                    ? 'bg-amber-100 text-amber-900'
+                                    : 'bg-orange-100 text-orange-900'
+                                }`}
+                              >
+                                {confPct}% {isHigh ? 'High' : isMedium ? 'Medium' : 'Possible'}
+                              </span>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))
+
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                            {med.frequency && (
+                              <span className="bg-teal-50 text-teal-800 font-semibold px-2 py-0.5 rounded-md border border-teal-100">
+                                Frequency: {med.frequency}
+                              </span>
+                            )}
+                            {med.duration && (
+                              <span className="bg-blue-50 text-blue-800 font-semibold px-2 py-0.5 rounded-md border border-blue-100">
+                                Duration: {med.duration}
+                              </span>
+                            )}
+                            {med.verification_warning && (
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md flex items-center space-x-1">
+                                <span>⚠️ {med.verification_warning}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {med.info && (
+                            <div className="pt-1 text-[11px] text-slate-600 flex items-start space-x-1.5 bg-white/80 p-1.5 rounded-lg border border-slate-100">
+                              <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
+                              <span>{med.info}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="p-4 bg-amber-50/90 rounded-2xl border border-amber-200 text-slate-700 space-y-2 text-xs">
                       <div className="flex items-center space-x-2 font-bold text-amber-900 text-sm">

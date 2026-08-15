@@ -80,22 +80,23 @@ def normalize_ocr_text(text):
 
 def extract_all_medicines_structured(full_text):
     """
-    Primary Extraction Mechanism: Parses COMPLETE OCR text using sliding line windows.
-    Identifies ALL medicine names, strengths, dosages, frequencies, and durations.
-    Does NOT depend on matching against a giant lookup database.
+    High-Recall Candidate Extraction Mechanism:
+    Parses COMPLETE OCR text using sliding line windows and pattern matching.
+    Does NOT depend on a giant lookup database or rigid validation filters.
+    Performs per-medicine confidence classification with verification warnings.
     """
     if not full_text or not full_text.strip():
         print("[MEDICINE] Extraction started: Empty input text")
-        return [], "Empty text input"
+        return [], "No text could be extracted from this document."
 
     norm_text = normalize_ocr_text(full_text)
     lines = [l.strip() for l in norm_text.splitlines() if l.strip()]
-    print(f"[MEDICINE] Extraction started on {len(lines)} OCR text lines")
+    print(f"[MEDICINE] High-recall extraction started on {len(lines)} OCR text lines")
 
     dose_pattern = re.compile(r'\b(\d+(\.\d+)?\s*(mg|g|ml|mcg|iu|sachet|tsp|tab|tablet|cap|capsule|pills|%))\b', re.IGNORECASE)
-    freq_pattern = re.compile(r'\b(1-0-1|1-0-0|0-0-1|1-1-1|0-1-0|2-0-2|once daily|twice daily|thrice daily|bd|tds|od|hs|subah|shaam|after meal|before meal|before breakfast|every \d+ hours|\d+-\d+-\d+)\b', re.IGNORECASE)
+    freq_pattern = re.compile(r'\b(1-0-1|1-0-0|0-0-1|1-1-1|0-1-0|2-0-2|once daily|twice daily|thrice daily|bd|tds|od|hs|subah|shaam|after meal|before meal|before breakfast|every \d+ hours|\d+-\d+-\d+|sos|stat)\b', re.IGNORECASE)
     dur_pattern = re.compile(r'\b(\d+\s*(days|day|weeks|week|months|month|for \d+ days))\b', re.IGNORECASE)
-    form_prefix_pattern = re.compile(r'^\s*(tab|tablet|cap|capsule|syrup|syr|inj|injection|gel|ointment|cream|drops|sachet|lotion)\b[\.\s]*', re.IGNORECASE)
+    form_prefix_pattern = re.compile(r'^\s*(tab|tablet|cap|capsule|syrup|syr|inj|injection|gel|ointment|cream|drops|sachet|lotion|adv)\b[\.\s]*', re.IGNORECASE)
 
     # Build sliding window blocks (1-line, 2-line, 3-line combinations)
     candidate_blocks = []
@@ -111,21 +112,22 @@ def extract_all_medicines_structured(full_text):
     stop_words = {
         "take", "stat", "sos", "daily", "oral", "po", "after", "before", "meal", "breakfast",
         "dinner", "day", "days", "tab", "tablet", "cap", "capsule", "syrup", "syr", "sex",
-        "age", "name", "date", "dr", "doctor", "patient", "male", "female", "yrs", "years"
+        "age", "name", "date", "dr", "doctor", "patient", "male", "female", "yrs", "years", "adv"
     }
 
     for block in candidate_blocks:
         line_lower = block.lower()
 
-        # Skip administrative headers unless block contains clear medicine dosage/frequency
+        # Skip obvious administrative headers unless block contains clear medicine patterns
         if any(h in line_lower for h in NON_MEDICINE_HEADERS) and not dose_pattern.search(block) and not freq_pattern.search(block):
             continue
 
         has_dose = dose_pattern.search(block)
         has_freq = freq_pattern.search(block)
         has_prefix = form_prefix_pattern.search(block)
+        has_rx_marker = bool(re.search(r'\b(tab|cap|syp|mg|sos|adv|\d+[\.\)])\b', block, re.IGNORECASE))
 
-        if has_dose or has_freq or (has_prefix and len(block.split()) > 1):
+        if has_dose or has_freq or has_prefix or has_rx_marker:
             dosage = has_dose.group(0) if has_dose else ""
             frequency = has_freq.group(0) if has_freq else ""
             dur_match = dur_pattern.search(block)
@@ -145,7 +147,7 @@ def extract_all_medicines_structured(full_text):
 
             name_part = re.sub(r'^[^\w]+|[^\w]+$', '', name_part).strip()
 
-            tokens = [t for t in name_part.split() if len(t) >= 3 and not t.isdigit() and t.lower() not in stop_words and not any(h == t.lower() for h in NON_MEDICINE_HEADERS)]
+            tokens = [t for t in name_part.split() if len(t) >= 2 and not t.isdigit() and t.lower() not in stop_words and not any(h == t.lower() for h in NON_MEDICINE_HEADERS)]
 
             if not tokens:
                 continue
@@ -154,14 +156,39 @@ def extract_all_medicines_structured(full_text):
             canonical_candidate = raw_med_token.capitalize()
 
             # Fuzzy match against known medicine purpose dictionary if similarity > 65%
+            matched_known = False
             for known_key in MEDICINE_PURPOSE_KNOWLEDGE.keys():
                 if fuzz.ratio(known_key, raw_med_token.lower()) > 65 or fuzz.partial_ratio(known_key, raw_med_token.lower()) > 80:
                     canonical_candidate = known_key.capitalize()
+                    matched_known = True
                     break
 
             key = canonical_candidate.lower()
 
-            # Check if candidate already exists to merge strength/dosage rather than creating duplicates
+            # Calculate individual medicine confidence rating
+            if has_dose and has_freq and matched_known:
+                conf = 0.92
+            elif has_dose or has_freq:
+                conf = 0.85 if matched_known else 0.72
+            elif matched_known:
+                conf = 0.78
+            elif len(canonical_candidate) >= 4:
+                conf = 0.58
+            else:
+                conf = 0.42
+
+            # Assign verification label & warning based on confidence
+            if conf >= 0.75:
+                conf_label = "High"
+                warning = ""
+            elif conf >= 0.50:
+                conf_label = "Medium"
+                warning = "Please verify manually"
+            else:
+                conf_label = "Low"
+                warning = "Possible medicine — please verify"
+
+            # Check if candidate already exists to merge attributes
             existing_match = next((item for item in extracted_medicines if item["name"].lower() == key or item["medicine"].lower() == key), None)
             if existing_match:
                 if not existing_match["strength"] and dosage:
@@ -171,11 +198,9 @@ def extract_all_medicines_structured(full_text):
                     existing_match["frequency"] = frequency
                 if not existing_match["duration"] and duration:
                     existing_match["duration"] = duration
-            elif key not in seen_keys and len(canonical_candidate) >= 3:
+            elif key not in seen_keys and len(canonical_candidate) >= 2:
                 seen_keys.add(key)
                 info = get_medicine_info(canonical_candidate)
-
-                confidence = 0.92 if (has_dose and has_freq) else (0.85 if has_dose or has_freq else 0.75)
 
                 extracted_medicines.append({
                     "name": canonical_candidate,
@@ -184,7 +209,9 @@ def extract_all_medicines_structured(full_text):
                     "dosage": dosage,
                     "frequency": frequency,
                     "duration": duration,
-                    "confidence": confidence,
+                    "confidence": conf,
+                    "confidence_label": conf_label,
+                    "verification_warning": warning,
                     "info": info,
                     "raw_line": block
                 })
@@ -192,10 +219,10 @@ def extract_all_medicines_structured(full_text):
     print(f"[MEDICINE] Candidates detected: {len(extracted_medicines)}")
     print(f"[MEDICINE] Final medicines count: {len(extracted_medicines)}")
 
-    # Generate Audio Script combining all extracted medicines and instructions
+    # Generate Audio Script combining ALL extracted medicines and instructions
     audio_parts = []
     if len(extracted_medicines) > 0:
-        med_count_str = f"Your prescription contains {len(extracted_medicines)} medication{'s' if len(extracted_medicines) > 1 else ''}."
+        med_count_str = f"Your prescription contains {len(extracted_medicines)} identified medication candidate{'s' if len(extracted_medicines) > 1 else ''}."
         audio_parts.append(med_count_str)
 
         for i, item in enumerate(extracted_medicines, start=1):
@@ -207,13 +234,13 @@ def extract_all_medicines_structured(full_text):
 
             item_script = f"Number {i}: {name} {strength}."
             if freq:
-                item_script += f" Take {freq}."
+                item_script += f" Frequency {freq}."
             if dur:
                 item_script += f" For {dur}."
             item_script += f" {info}"
             audio_parts.append(item_script)
 
-        audio_parts.append("Please follow the exact timings prescribed by your healthcare provider.")
+        audio_parts.append("Please verify all medications with your physician or pharmacist.")
     else:
         audio_parts.append("No medicines could be confidently identified from this prescription. Please consult your doctor or upload a clearer photo.")
 

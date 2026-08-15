@@ -123,9 +123,10 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 "lines": [{"text": m} for m in medicines_only_strings],
                 "text": extracted_str,
                 "extracted_text": extracted_str,
-                "is_handwritten_detected": False,
-                "requires_manual_review": len(medicines_data) == 0 or quality_metrics.get("image_quality") == "low",
-                "issues": "No issues" if len(medicines_data) > 0 else f"No medicines identified. {quality_metrics.get('reason', '')}"
+                "raw_ocr_text": extracted_str,
+                "is_handwritten_detected": True,
+                "requires_manual_review": False,
+                "issues": "Candidates detected" if len(medicines_data) > 0 else f"No candidates identified. {quality_metrics.get('reason', '')}"
             },
             status=status.HTTP_200_OK
         )

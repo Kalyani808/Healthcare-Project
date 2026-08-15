@@ -55,7 +55,7 @@ class GLMOCRService:
         ocr_model = self.get_preferred_ocr_model(available_models) if is_running else None
 
         if is_running and ocr_model:
-            print(f"[GLM-OCR] Sending image to local Ollama model: {ocr_model} (25s timeout)")
+            print(f"[GLM-OCR] Sending image to local Ollama model: {ocr_model} (90s timeout)")
             try:
                 prompt = (
                     "Extract all written and printed prescription text from this medical document image accurately. "
@@ -63,7 +63,7 @@ class GLMOCRService:
                     "Output exact OCR text lines without adding explanations or medical commentary."
                 )
 
-                client = ollama.Client(host=self.base_url, timeout=25.0)
+                client = ollama.Client(host=self.base_url, timeout=90.0)
                 response = client.chat(
                     model=ocr_model,
                     messages=[{

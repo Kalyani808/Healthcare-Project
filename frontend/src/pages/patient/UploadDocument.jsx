@@ -28,6 +28,42 @@ const UploadDocument = () => {
   const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
   const [inlineError, setInlineError] = useState(null);
   const [activeDocId, setActiveDocId] = useState(null);
+  const [verificationInputs, setVerificationInputs] = useState({});
+
+  const handleConfirmVerificationMedicine = (vIdx, item) => {
+    const enteredName = verificationInputs[vIdx] !== undefined ? verificationInputs[vIdx] : item.suggested_name;
+    if (!enteredName || !enteredName.strip ? !enteredName : !enteredName.trim()) return;
+
+    const newConfirmedMed = {
+      name: enteredName.trim().capitalize ? enteredName.trim().capitalize() : enteredName.trim(),
+      medicine: enteredName.trim(),
+      strength: item.strength || '',
+      frequency: item.frequency || '',
+      duration: item.duration || '',
+      confidence: 0.95,
+      confidence_label: 'High',
+      verification_warning: 'User verified medicine entry',
+      info: `Prescribed medication (${enteredName.trim()}). Verified manually from handwritten prescription stroke.`
+    };
+
+    setAnalyzed((prev) => {
+      if (!prev) return prev;
+      const updatedMeds = [...(prev.medicines || []), newConfirmedMed];
+      const updatedNeedsVer = (prev.needs_verification || []).filter((_, idx) => idx !== vIdx);
+      return {
+        ...prev,
+        medicines: updatedMeds,
+        medicines_found: updatedMeds.length,
+        needs_verification: updatedNeedsVer
+      };
+    });
+
+    setVerificationInputs((prev) => {
+      const copy = { ...prev };
+      delete copy[vIdx];
+      return copy;
+    });
+  };
 
   useEffect(() => {
     return () => {
@@ -472,6 +508,42 @@ const UploadDocument = () => {
                     </div>
                   )}
                 </div>
+
+                {/* UNCERTAIN MEDICINE ENTRIES (REQUIRES MANUAL VERIFICATION) */}
+                {analyzed.needs_verification && analyzed.needs_verification.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-200">
+                    <div className="flex items-center space-x-1.5 text-xs font-bold text-amber-900">
+                      <FaExclamationTriangle className="text-amber-600" />
+                      <span>Uncertain Prescription Lines (Requires Manual Verification)</span>
+                    </div>
+                    {analyzed.needs_verification.map((item, vIdx) => (
+                      <div key={vIdx} className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1.5 text-xs">
+                        <div className="flex justify-between items-center text-slate-700">
+                          <span className="font-semibold text-slate-900">Handwriting Stroke:</span>
+                          <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-mono font-bold">Needs Verification</span>
+                        </div>
+                        <p className="font-mono text-slate-800 bg-white p-1.5 rounded border border-amber-200 text-[11px]">{item.raw_text}</p>
+                        <div className="flex space-x-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Type correct medicine name (e.g. Nodosis 500mg)"
+                            value={verificationInputs[vIdx] !== undefined ? verificationInputs[vIdx] : (item.suggested_name || '')}
+                            onChange={(e) => setVerificationInputs({ ...verificationInputs, [vIdx]: e.target.value })}
+                            className="flex-1 px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-amber-500 font-semibold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmVerificationMedicine(vIdx, item)}
+                            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-all flex items-center space-x-1"
+                          >
+                            <FaCheckCircle className="text-xs" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* AUDIO TTS PLAYER CONTROLS */}
                 {analyzed.audio_script && (

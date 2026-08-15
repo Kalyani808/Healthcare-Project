@@ -113,25 +113,23 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         mistral_service = MistralExtractionService()
         raw_meds, method = mistral_service.extract_medicines(extracted_str)
 
-        # Enrich with educational medicine info (without altering prescribed dosage)
-        medicines_data = MedicineInfoService.enrich_medicines_with_info(raw_meds)
+        # Hard confidence gate (>= 0.75 confidence and valid non-null name)
+        confident_medicines, needs_verification_data = MedicineInfoService.process_and_gate_medicines(raw_meds)
 
         # Generate multilingual audio scripts (English, Hindi, Marathi)
-        en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(medicines_data)
+        en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
 
-        print(f"[{method.upper()} RESULT] Found {len(medicines_data)} medicines")
-        for med in medicines_data:
-            print(f"  - {med.get('name') or med.get('medicine')}: strength={med.get('strength')}, freq={med.get('frequency')}, duration={med.get('duration')}, timing={med.get('timing')} (confidence: {med.get('confidence')})")
+        print(f"[{method.upper()} RESULT] Found {len(confident_medicines)} confident medicines, {len(needs_verification_data)} needing verification")
 
-        medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in medicines_data]
-        avg_conf = float(sum(m.get('confidence', 0.8) for m in medicines_data) / len(medicines_data)) if medicines_data else 0.40
+        medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in confident_medicines]
 
         return Response(
             {
                 "status": "complete",
                 "document_id": document.id,
-                "medicines_found": len(medicines_data),
-                "medicines": medicines_data,
+                "medicines_found": len(confident_medicines),
+                "medicines": confident_medicines,
+                "needs_verification": needs_verification_data,
                 "medicines_only": medicines_only_strings,
                 "audio_script": en_script,
                 "audio_scripts": audio_scripts,

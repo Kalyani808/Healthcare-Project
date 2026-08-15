@@ -101,6 +101,43 @@ class MedicineInfoService:
         for med in medicines_list:
             item = dict(med)
             name = item.get("name") or item.get("medicine") or ""
-            item["info"] = cls.get_medicine_info(name)
-            enriched.append(item)
+            if name:
+                item["info"] = cls.get_medicine_info(name)
+                enriched.append(item)
         return enriched
+
+    @classmethod
+    def process_and_gate_medicines(cls, raw_medicines_list):
+        """
+        Hard Confidence Gate (Step 2):
+        - Items with confidence >= 0.75 and a valid non-null name are returned as confident_medicines.
+        - Items with confidence < 0.75, garbled text, or null name are moved to needs_verification list.
+        """
+        confident = []
+        needs_verification = []
+
+        for item in raw_medicines_list:
+            med_name = item.get("name") or item.get("medicine")
+            conf = float(item.get("confidence", 0.0))
+
+            # Reject hallucinated / low-confidence guesses
+            if med_name and med_name.strip() and conf >= 0.75:
+                enriched_item = dict(item)
+                enriched_item["name"] = med_name.strip().capitalize()
+                enriched_item["medicine"] = enriched_item["name"]
+                enriched_item["info"] = cls.get_medicine_info(enriched_item["name"])
+                confident.append(enriched_item)
+            else:
+                raw = item.get("raw_text") or item.get("raw_line") or med_name or ""
+                if raw and len(raw.strip()) > 2:
+                    needs_verification.append({
+                        "raw_text": raw.strip(),
+                        "suggested_name": med_name.strip() if med_name else "",
+                        "strength": item.get("strength") or item.get("dosage") or "",
+                        "frequency": item.get("frequency") or "",
+                        "duration": item.get("duration") or "",
+                        "confidence": conf,
+                        "verification_reason": "Low confidence or garbled handwriting stroke — please verify manually"
+                    })
+
+        return confident, needs_verification

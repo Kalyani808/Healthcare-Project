@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import urllib.request
+import re
 import ollama
 
 logger = logging.getLogger(__name__)
@@ -40,27 +41,42 @@ class MistralExtractionService:
 
         if is_running and any("mistral" in m for m in available_models):
             print(f"[MISTRAL EXTRACTION] Parsing OCR text using local model: {model_name}")
-            prompt = f"""You are an expert clinical prescription parser. Extract ALL prescribed medicine entries from the raw OCR text into a structured JSON array.
+            prompt = f"""You are an expert clinical prescription parser. Extract prescribed medicine entries from the raw OCR text into a structured JSON array.
 
-STRICT EXTRACTION RULES:
-1. Extract EVERY medicine entry present in the OCR text.
-2. DO NOT invent or hallucinate missing strengths or durations if they are not in the text. Leave empty string "" if missing.
-3. DO NOT classify doctor names (e.g. Dr. Sharma), patient names (e.g. Aman, Pooja), clinic/hospital headers, or blood pressure readings (e.g. 120/80, 130/85) as medicines.
-4. Understand prescription dosage notation: 1-0-1 (twice daily), 1-0-0 (morning), 0-0-1 (night), 1-1-1 (thrice daily), BD, OD, TDS, HS.
-5. Provide timing details (e.g. "after meal", "30 min before breakfast") when present.
-6. Provide a numerical confidence score (0.0 to 1.0) for each extracted item.
+STRICT CLINICAL SAFETY RULES:
+1. DO NOT guess or hallucinate closest-sounding medicine names if the OCR text is garbled, fragmented, or noisy.
+2. If a line is garbled or uncertain (e.g. "Nloclon", "Feleccexi", "Sncfta"), set "name": null and "confidence": 0.3. DO NOT map it to a guessed drug like "Clonazepam" or "Enorfloxacin". A wrong medicine name is a severe patient safety hazard.
+3. Only assign confidence >= 0.80 if the medicine name is clearly legible and unambiguous in the OCR text (e.g., "Amoxicillin", "Paracetamol", "Augmentin").
+4. DO NOT classify doctor names, patient names, clinic headers, or blood pressure readings (e.g., 120/70) as medicines.
+5. Provide strength, frequency (1-0-1, BD, OD, HS), duration, and timing when present.
+
+FEW-SHOT EXAMPLES:
+Input OCR Line: "Tab. Amoxicillin 250mg 1-0-1 for 5 days"
+Output: {{"name": "Amoxicillin", "raw_text": "Tab. Amoxicillin 250mg 1-0-1", "strength": "250 mg", "frequency": "1-0-1", "duration": "5 days", "timing": "after meal", "confidence": 0.95}}
+
+Input OCR Line: "Nloclon 500mg BD"
+Output: {{"name": null, "raw_text": "Nloclon 500mg BD", "strength": "500 mg", "frequency": "BD", "duration": "", "timing": "", "confidence": 0.30}}
 
 Return ONLY valid JSON matching this exact structure:
 {{
   "medicines": [
     {{
-      "name": "Augmentin",
-      "raw_text": "Tab. Augmentin 625mg 1-0-1",
-      "strength": "625 mg",
+      "name": "Amoxicillin",
+      "raw_text": "Tab. Amoxicillin 250mg 1-0-1",
+      "strength": "250 mg",
       "frequency": "1-0-1",
       "duration": "5 days",
       "timing": "after meal",
       "confidence": 0.95
+    }},
+    {{
+      "name": null,
+      "raw_text": "Nloclon 500mg BD",
+      "strength": "500 mg",
+      "frequency": "BD",
+      "duration": "",
+      "timing": "",
+      "confidence": 0.30
     }}
   ]
 }}
@@ -80,47 +96,66 @@ RAW PRESCRIPTION OCR TEXT:
 
                 content = response.get('message', {}).get('content', '').strip()
                 if content:
-                    parsed = json.loads(content)
+                    # Robust JSON repair for LLM responses
+                    json_str = content
+                    match = re.search(r'\{.*\}', content, re.DOTALL)
+                    if match:
+                        json_str = match.group(0)
+
+                    # Remove trailing commas
+                    json_str = re.sub(r',\s*([\}\]])', r'\1', json_str)
+
+                    try:
+                        parsed = json.loads(json_str)
+                    except json.JSONDecodeError:
+                        # Secondary fallback repair
+                        json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+                        parsed = json.loads(json_str)
+
                     raw_medicines = parsed.get("medicines", [])
-
                     formatted_medicines = []
+
                     for item in raw_medicines:
-                        name = item.get("name", "").strip()
-                        if not name or len(name) < 2:
+                        name = item.get("name")
+                        raw_text = item.get("raw_text") or item.get("raw_line") or ""
+                        conf = float(item.get("confidence", 0.0))
+
+                        # If name is None, empty, or confidence < 0.75 -> Pass to needs_verification
+                        if not name or len(str(name).strip()) < 2 or conf < 0.75:
+                            formatted_medicines.append({
+                                "name": None,
+                                "raw_text": raw_text or str(name or ""),
+                                "strength": item.get("strength", ""),
+                                "frequency": item.get("frequency", ""),
+                                "duration": item.get("duration", ""),
+                                "confidence": conf
+                            })
                             continue
 
-                        # Exclude obvious non-medicines
-                        name_lower = name.lower()
-                        if any(h in name_lower for h in ["dr.", "doctor", "patient", "clinic", "hospital", "date", "blood pressure", "120/80", "130/80"]):
-                            continue
+                        clean_name = str(name).strip()
+                        name_lower = clean_name.lower()
 
-                        conf = float(item.get("confidence", 0.85))
-                        if conf >= 0.75:
-                            conf_label = "High"
-                            warning = ""
-                        elif conf >= 0.50:
-                            conf_label = "Medium"
-                            warning = "Please verify manually"
-                        else:
-                            conf_label = "Low"
-                            warning = "Possible medicine — please verify"
+                        # Exclude non-medicines
+                        if any(h in name_lower for h in ["dr.", "doctor", "patient", "clinic", "hospital", "date", "blood pressure", "120/80", "130/80", "120/70"]):
+                            continue
 
                         formatted_medicines.append({
-                            "name": name.capitalize(),
-                            "medicine": name.capitalize(),
-                            "raw_text": item.get("raw_text", ""),
+                            "name": clean_name.capitalize(),
+                            "medicine": clean_name.capitalize(),
+                            "raw_text": raw_text,
                             "strength": item.get("strength", ""),
                             "dosage": item.get("strength", ""),
                             "frequency": item.get("frequency", ""),
                             "duration": item.get("duration", ""),
                             "timing": item.get("timing", ""),
                             "confidence": conf,
-                            "confidence_label": conf_label,
-                            "verification_warning": warning
+                            "confidence_label": "High",
+                            "verification_warning": ""
                         })
 
-                    print(f"[MISTRAL SUCCESS] Extracted {len(formatted_medicines)} medicines via local Mistral")
-                    return formatted_medicines, "ollama_mistral_json"
+                    if formatted_medicines:
+                        print(f"[MISTRAL SUCCESS] Extracted {len(formatted_medicines)} medicine items via local Mistral")
+                        return formatted_medicines, "ollama_mistral_json"
             except Exception as e:
                 print(f"[MISTRAL ERROR] Mistral extraction failed: {str(e)}")
 

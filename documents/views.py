@@ -103,8 +103,9 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             print(f"[QUALITY ASSESSMENT] Document #{document.id}: {quality_metrics}")
 
         extracted_str = document.extracted_text or ""
+        safe_preview = extracted_str[:200].encode('ascii', errors='ignore').decode('ascii')
         print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
-        print(f"[OCR OUTPUT] Raw text (first 200 chars): {extracted_str[:200]}")
+        print(f"[OCR OUTPUT] Raw text preview: {safe_preview}")
 
         from .services.mistral_extraction_service import MistralExtractionService
         from .services.medicine_info_service import MedicineInfoService
@@ -122,6 +123,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         print(f"[{method.upper()} RESULT] Found {len(confident_medicines)} confident medicines, {len(needs_verification_data)} needing verification")
 
         medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in confident_medicines]
+        avg_conf = float(sum(m.get('confidence', 0.8) for m in confident_medicines) / len(confident_medicines)) if confident_medicines else 0.40
 
         return Response(
             {
@@ -138,14 +140,14 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 "image_quality": quality_metrics.get("image_quality", "medium"),
                 "quality_reason": quality_metrics.get("reason", ""),
                 "confidence": round(avg_conf, 2),
-                "num_lines": len(medicines_data),
+                "num_lines": len(confident_medicines),
                 "lines": [{"text": m} for m in medicines_only_strings],
                 "text": extracted_str,
                 "extracted_text": extracted_str,
                 "raw_ocr_text": extracted_str,
                 "is_handwritten_detected": True,
-                "requires_manual_review": len(medicines_data) == 0,
-                "issues": "Medicines identified successfully" if len(medicines_data) > 0 else "No medicines identified from prescription text."
+                "requires_manual_review": len(confident_medicines) == 0,
+                "issues": "Medicines identified successfully" if len(confident_medicines) > 0 else "No medicines identified from prescription text."
             },
             status=status.HTTP_200_OK
         )

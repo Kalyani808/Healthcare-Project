@@ -16,11 +16,13 @@ def run_extraction(document_id):
         ocr_service = GLMOCRService()
         result = ocr_service.extract_text_from_image(document.file.path)
 
-        document.extracted_text = result['text']
+        extracted_text = result.get('text', '')
+        document.extracted_text = extracted_text
         document.status = 'text_extracted'
         document.save()
 
-        print(f"[BACKGROUND TASK SUCCESS] Document ID #{document_id} extracted via {result.get('method')}: {result['text'][:80]}...")
+        safe_preview = extracted_text[:80].encode('ascii', errors='ignore').decode('ascii')
+        print(f"[BACKGROUND TASK SUCCESS] Document ID #{document_id} OCR completed via {result.get('method')}: {safe_preview}...")
         return result
     except Exception as e:
         error_str = str(e)

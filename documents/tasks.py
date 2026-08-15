@@ -23,15 +23,17 @@ def run_extraction(document_id):
         print(f"[BACKGROUND TASK SUCCESS] Document ID #{document_id} extracted via {result.get('method')}: {result['text'][:80]}...")
         return result
     except Exception as e:
-        print(f"[BACKGROUND TASK ERROR] Document ID #{document_id}: {str(e)}")
+        error_str = str(e)
+        print(f"[BACKGROUND TASK ERROR] Document ID #{document_id}: {error_str}")
         try:
             close_old_connections()
             doc = MedicalDocument.objects.get(id=document_id)
             doc.status = 'failed'
+            doc.error_message = error_str
             doc.save()
         except Exception as inner_e:
             print(f"[BACKGROUND TASK DB ERROR] {str(inner_e)}")
-        return {"status": "failed", "error": str(e)}
+        return {"status": "failed", "error": error_str}
     finally:
         close_old_connections()
 

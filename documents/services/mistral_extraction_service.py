@@ -70,18 +70,13 @@ RAW PRESCRIPTION OCR TEXT:
 """
 
             try:
-                def _do_mistral_call():
-                    return ollama.chat(
-                        model=model_name,
-                        messages=[{'role': 'user', 'content': prompt}],
-                        format='json',
-                        options={'temperature': 0.0, 'num_predict': 512}
-                    )
-
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_do_mistral_call)
-                    response = future.result(timeout=15)
+                client = ollama.Client(host=self.base_url, timeout=12.0)
+                response = client.chat(
+                    model=model_name,
+                    messages=[{'role': 'user', 'content': prompt}],
+                    format='json',
+                    options={'temperature': 0.0, 'num_predict': 512}
+                )
 
                 content = response.get('message', {}).get('content', '').strip()
                 if content:

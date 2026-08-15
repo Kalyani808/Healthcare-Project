@@ -90,7 +90,8 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 {
                     "status": "failed",
                     "document_id": document.id,
-                    "error": "ICR text extraction failed."
+                    "error": "Prescription OCR extraction failed.",
+                    "error_message": document.error_message or "Unknown extraction failure"
                 },
                 status=status.HTTP_200_OK
             )
@@ -105,11 +106,15 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
         print(f"[OCR OUTPUT] Raw text (first 200 chars): {extracted_str[:200]}")
 
-        from .icr_processor import extract_medicines_FAST
+        from .services.mistral_extraction_service import MistralExtractionService
+        from .services.medicine_info_service import MedicineInfoService
         from .services.audio_service import AudioService
 
-        medicines_data = extract_medicines_FAST(extracted_str)
-        method = "fast_subsecond_parser"
+        mistral_service = MistralExtractionService()
+        raw_meds, method = mistral_service.extract_medicines(extracted_str)
+
+        # Enrich with educational medicine info (without altering prescribed dosage)
+        medicines_data = MedicineInfoService.enrich_medicines_with_info(raw_meds)
 
         # Generate multilingual audio scripts (English, Hindi, Marathi)
         en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(medicines_data)

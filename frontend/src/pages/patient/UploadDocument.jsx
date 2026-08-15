@@ -176,7 +176,8 @@ const UploadDocument = () => {
           } else if (statusData.status === 'failed') {
             clearInterval(pollInterval);
             setUploading(false);
-            alert('Prescription OCR extraction failed: ' + (statusData.error || 'Ollama is not running or the required local model is unavailable.'));
+            const detailErr = statusData.error_message || statusData.error || 'Ollama is not running or the required local model is unavailable.';
+            alert('Prescription OCR extraction failed: ' + detailErr);
           } else if (pollCount >= maxPollAttempts) {
             clearInterval(pollInterval);
             setUploading(false);

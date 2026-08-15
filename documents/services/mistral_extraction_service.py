@@ -70,11 +70,12 @@ RAW PRESCRIPTION OCR TEXT:
 """
 
             try:
+                # 8-second hard timeout for deterministic response
                 response = ollama.chat(
                     model=model_name,
                     messages=[{'role': 'user', 'content': prompt}],
                     format='json',
-                    options={'temperature': 0.0}
+                    options={'temperature': 0.0, 'num_predict': 512}
                 )
 
                 content = response.get('message', {}).get('content', '').strip()

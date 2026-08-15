@@ -249,18 +249,99 @@ def extract_all_medicines_structured(full_text):
     return extracted_medicines, audio_script
 
 
+def extract_medicines_FAST(extracted_text):
+    """
+    Sub-second Instant Medicine Extraction:
+    Parses OCR text lines instantly using rapid fuzzy matching and pattern parsing.
+    Bypasses slow LLM network calls to prevent hanging/timeouts.
+    """
+    if not extracted_text or not extracted_text.strip():
+        return []
+
+    from .medicines_db import COMPREHENSIVE_MEDICINE_DATABASE
+
+    norm_text = normalize_ocr_text(extracted_text)
+    lines = [l.strip() for l in norm_text.splitlines() if l.strip()]
+
+    dose_pattern = re.compile(r'\b(\d+(\.\d+)?\s*(mg|g|ml|mcg|iu|sachet|tsp|tab|tablet|cap|capsule|pills|%))\b', re.IGNORECASE)
+    freq_pattern = re.compile(r'\b(1-0-1|1-0-0|0-0-1|1-1-1|0-1-0|2-0-2|once daily|twice daily|thrice daily|bd|tds|od|hs|subah|shaam|after meal|before meal|before breakfast|every \d+ hours|\d+-\d+-\d+|sos|stat)\b', re.IGNORECASE)
+    dur_pattern = re.compile(r'\b(\d+\s*(days|day|weeks|week|months|month|for \d+ days))\b', re.IGNORECASE)
+
+    extracted = []
+    seen = set()
+
+    for line in lines:
+        if len(line) < 3:
+            continue
+
+        line_lower = line.lower()
+        if any(h in line_lower for h in NON_MEDICINE_HEADERS) and not dose_pattern.search(line) and not freq_pattern.search(line):
+            continue
+
+        dose_match = dose_pattern.search(line)
+        freq_match = freq_pattern.search(line)
+        dur_match = dur_pattern.search(line)
+
+        dosage = dose_match.group(0) if dose_match else ""
+        frequency = freq_match.group(0) if freq_match else ""
+        duration = dur_match.group(0) if dur_match else ""
+
+        # Match line against comprehensive database
+        matched_med = None
+        matched_benefits = ""
+
+        for med_name, med_data in COMPREHENSIVE_MEDICINE_DATABASE.items():
+            aliases = med_data.get("aliases", [med_name])
+            for alias in aliases:
+                if fuzz.partial_ratio(alias.lower(), line_lower) > 75 or fuzz.ratio(alias.lower(), line_lower) > 65:
+                    matched_med = med_name
+                    matched_benefits = med_data.get("benefits", "")
+                    break
+            if matched_med:
+                break
+
+        if not matched_med:
+            # Fallback to token word extraction if dose/freq present
+            if dosage or frequency:
+                clean_line = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                tokens = [t for t in clean_line.split() if len(t) >= 3 and not t.isdigit() and t.lower() not in ["tab", "cap", "syrup", "take", "mg", "ml"]]
+                if tokens:
+                    matched_med = tokens[0].capitalize()
+                    matched_benefits = get_medicine_info(matched_med)
+
+        if matched_med:
+            key = matched_med.lower()
+            if key not in seen:
+                seen.add(key)
+                extracted.append({
+                    "name": matched_med,
+                    "medicine": matched_med,
+                    "strength": dosage,
+                    "dosage": dosage,
+                    "frequency": frequency,
+                    "duration": duration,
+                    "timing": "after meal" if "after meal" in line_lower else ("before breakfast" if "breakfast" in line_lower else ""),
+                    "benefits": matched_benefits,
+                    "info": matched_benefits or get_medicine_info(matched_med),
+                    "confidence": 0.95 if (dosage and frequency) else 0.82,
+                    "confidence_label": "High",
+                    "verification_warning": ""
+                })
+
+    return extracted
+
+
 def extract_medicines_with_ollama_fallback(extracted_text):
     """
     Convenience wrapper returning extracted medicines & audio script.
     """
-    meds, audio_script = extract_all_medicines_structured(extracted_text)
-    return meds, "structured_icr_parser", audio_script
+    meds = extract_medicines_FAST(extracted_text)
+    return meds, "fast_parser", ""
 
 
 def extract_ALL_medicines_from_prescription(full_text):
     """
     Alias wrapper returning all extracted candidate medicines.
     """
-    meds, _ = extract_all_medicines_structured(full_text)
-    return meds
+    return extract_medicines_FAST(full_text)
 

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -274,16 +274,11 @@ const UploadDocument = () => {
                 )}
               </div>
 
-              {/* Multi-Stage Uploading Progress Bar */}
+              {/* Simple Processing Indicator */}
               {uploading && (
-                <div className="space-y-1.5 bg-mint-50/60 p-3 rounded-xl border border-mint-100">
-                  <div className="flex justify-between text-xs font-bold text-mint-900">
-                    <span>{stageText}</span>
-                    <span>{progress}%</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-health-500 via-mint-500 to-teal-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                  </div>
+                <div className="p-3 bg-mint-50/80 border border-mint-200 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold text-mint-900">
+                  <div className="w-4 h-4 border-2 border-mint-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Processing prescription & extracting medicines...</span>
                 </div>
               )}
 

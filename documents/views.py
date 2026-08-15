@@ -105,15 +105,11 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
         print(f"[OCR OUTPUT] Raw text (first 200 chars): {extracted_str[:200]}")
 
-        from .services.mistral_extraction_service import MistralExtractionService
-        from .services.medicine_info_service import MedicineInfoService
+        from .icr_processor import extract_medicines_FAST
         from .services.audio_service import AudioService
 
-        mistral_service = MistralExtractionService()
-        raw_medicines, method = mistral_service.extract_medicines(extracted_str)
-
-        # Enrich with educational medicine info (without altering prescribed dosage)
-        medicines_data = MedicineInfoService.enrich_medicines_with_info(raw_medicines)
+        medicines_data = extract_medicines_FAST(extracted_str)
+        method = "fast_subsecond_parser"
 
         # Generate multilingual audio scripts (English, Hindi, Marathi)
         en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(medicines_data)

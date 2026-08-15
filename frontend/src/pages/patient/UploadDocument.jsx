@@ -145,8 +145,12 @@ const UploadDocument = () => {
       setProgress(60);
       setStageText('Stage 3: Mistral 7B Extracting structured medicines...');
 
-      // Step 3: Poll GET /api/documents/{id}/extraction-status/ until complete
+      // Step 3: Poll GET /api/documents/{id}/extraction-status/ until complete (Max 10 attempts = 20s)
+      let pollCount = 0;
+      const maxPollAttempts = 10;
+
       const pollInterval = setInterval(async () => {
+        pollCount += 1;
         try {
           const statusRes = await api.get(`/api/documents/${docId}/extraction-status/`);
           const statusData = statusRes.data;
@@ -173,11 +177,20 @@ const UploadDocument = () => {
             clearInterval(pollInterval);
             setUploading(false);
             alert('Prescription OCR extraction failed: ' + (statusData.error || 'Ollama is not running or the required local model is unavailable.'));
+          } else if (pollCount >= maxPollAttempts) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            alert('Extraction polling timed out after 20 seconds. Please refresh or retry uploading.');
           } else {
             setProgress((prev) => Math.min(prev + 10, 95));
           }
         } catch (pollErr) {
           console.error('Polling error:', pollErr);
+          if (pollCount >= maxPollAttempts) {
+            clearInterval(pollInterval);
+            setUploading(false);
+            alert('Extraction network error occurred while polling status.');
+          }
         }
       }, 2000);
 

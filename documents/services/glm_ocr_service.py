@@ -55,7 +55,7 @@ class GLMOCRService:
         ocr_model = self.get_preferred_ocr_model(available_models) if is_running else None
 
         if is_running and ocr_model:
-            print(f"[GLM-OCR] Sending image to local Ollama model: {ocr_model}")
+            print(f"[GLM-OCR] Sending image to local Ollama model: {ocr_model} (15s timeout set)")
             try:
                 prompt = (
                     "Extract all written and printed prescription text from this medical document image accurately. "
@@ -63,15 +63,21 @@ class GLMOCRService:
                     "Output exact OCR text lines without adding explanations or medical commentary."
                 )
 
-                response = ollama.chat(
-                    model=ocr_model,
-                    messages=[{
-                        'role': 'user',
-                        'content': prompt,
-                        'images': [image_path]
-                    }],
-                    options={'temperature': 0.0}
-                )
+                def _do_ollama_call():
+                    return ollama.chat(
+                        model=ocr_model,
+                        messages=[{
+                            'role': 'user',
+                            'content': prompt,
+                            'images': [image_path]
+                        }],
+                        options={'temperature': 0.0}
+                    )
+
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_do_ollama_call)
+                    response = future.result(timeout=15)
 
                 extracted_text = response.get('message', {}).get('content', '').strip()
                 if extracted_text:
@@ -83,6 +89,8 @@ class GLMOCRService:
                         "model_used": ocr_model,
                         "offline": True
                     }
+            except concurrent.futures.TimeoutError:
+                print(f"[GLM-OCR TIMEOUT] Ollama model {ocr_model} call timed out after 15 seconds. Triggering EasyOCR fallback...")
             except Exception as e:
                 print(f"[GLM-OCR ERROR] Ollama execution failed: {str(e)}")
 

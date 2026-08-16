@@ -97,7 +97,51 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
         print(f"[ICR OUTPUT] Raw text (first 200 chars): {extracted_str[:200]}")
 
-        medicines_data, method = extract_medicines_with_ollama_fallback(extracted_str)
+        medicines_data = []
+        method = "fuzzy_match"
+
+        # Check if extracted_str is structured JSON from Vision LLM
+        clean_extracted = extracted_str.strip()
+        if clean_extracted.startswith("```json"):
+            clean_extracted = clean_extracted.removeprefix("```json").removesuffix("```").strip()
+        elif clean_extracted.startswith("```"):
+            clean_extracted = clean_extracted.removeprefix("```").removesuffix("```").strip()
+
+        if clean_extracted.startswith("{") and "medicines" in clean_extracted:
+            try:
+                import json
+                parsed_json = json.loads(clean_extracted)
+                med_list = parsed_json.get("medicines", [])
+                for item in med_list:
+                    med_name = item.get("name") or item.get("medicine", "")
+                    if med_name:
+                        dosage_str = item.get("dosage", "")
+                        freq_str = item.get("frequency", "")
+                        inst_str = item.get("instructions", "")
+                        raw_parts = [med_name]
+                        if dosage_str:
+                            raw_parts.append(dosage_str)
+                        if freq_str:
+                            raw_parts.append(freq_str)
+                        if inst_str:
+                            raw_parts.append(f"({inst_str})")
+
+                        medicines_data.append({
+                            "medicine": med_name,
+                            "found_as": inst_str or med_name,
+                            "confidence": item.get("confidence") or 0.95,
+                            "dosage": dosage_str,
+                            "frequency": freq_str,
+                            "raw_line": " ".join(raw_parts)
+                        })
+                if medicines_data:
+                    method = "vision_llm"
+            except Exception as j_err:
+                print(f"[JSON PARSE FALLBACK] {j_err}")
+
+        if not medicines_data:
+            medicines_data, method = extract_medicines_with_ollama_fallback(extracted_str)
+
         print(f"[{method.upper()} RESULT] Found {len(medicines_data)} medicines")
         for med in medicines_data:
             print(f"  - {med.get('medicine')}: {med.get('dosage')} (confidence: {med.get('confidence')})")

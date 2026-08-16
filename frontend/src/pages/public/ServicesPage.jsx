@@ -10,7 +10,7 @@ const ServicesPage = () => {
       icon: FaFileUpload,
       title: 'AI Prescription & Document Parsing',
       description: 'Upload handwritten prescriptions or lab test images. AI identifies medication names, dosage timings (morning/night), and dietary restrictions in your language.',
-      color: 'bg-health-50 text-health-600',
+      color: 'bg-health-50 dark:bg-health-950/60 text-health-600 dark:text-health-400',
       action: '/patient/upload-document',
       btnText: 'Upload Document',
     },
@@ -18,7 +18,7 @@ const ServicesPage = () => {
       icon: FaRobot,
       title: 'Voice-Based AI Symptom Companion',
       description: 'Interactive AI companion that listens to symptoms, asks simple clarifying questions, and provides empathetic first-aid advice.',
-      color: 'bg-mint-50 text-mint-600',
+      color: 'bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400',
       action: '/patient/ai-assistant',
       btnText: 'Talk to AI Assistant',
     },
@@ -26,7 +26,7 @@ const ServicesPage = () => {
       icon: FaStethoscope,
       title: 'Tele-Consultation Booking',
       description: 'Connect with certified doctors across General Medicine, Pediatrics, Gynaecology, and Cardiology without traveling long distances.',
-      color: 'bg-tealSoft-50 text-tealSoft-600',
+      color: 'bg-tealSoft-50 dark:bg-tealSoft-950/60 text-tealSoft-600 dark:text-tealSoft-400',
       action: '/patient/appointments',
       btnText: 'Book Appointment',
     },
@@ -34,7 +34,7 @@ const ServicesPage = () => {
       icon: FaFileAlt,
       title: 'Digital Health Vault',
       description: 'Store all family medical histories, previous prescriptions, and lab test results securely in one organized cloud vault.',
-      color: 'bg-blue-50 text-blue-600',
+      color: 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400',
       action: '/patient/document-history',
       btnText: 'Open Medical Vault',
     },
@@ -43,13 +43,13 @@ const ServicesPage = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
       <div className="text-center space-y-3 max-w-2xl mx-auto">
-        <span className="text-xs font-bold uppercase tracking-wider text-health-600 bg-health-50 px-3.5 py-1.5 rounded-full">
+        <span className="text-xs font-bold uppercase tracking-wider text-health-600 dark:text-health-400 bg-health-50 dark:bg-slate-800 px-3.5 py-1.5 rounded-full border border-health-100 dark:border-slate-700">
           Comprehensive Services
         </span>
-        <h1 className="text-3xl font-extrabold text-slate-800">
+        <h1 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">
           Everything You Need for Peace of Mind
         </h1>
-        <p className="text-slate-600 text-sm">
+        <p className="text-slate-600 dark:text-slate-300 text-sm">
           Designed specifically to be simple, fast, and accessible on any device.
         </p>
       </div>
@@ -63,8 +63,8 @@ const ServicesPage = () => {
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${service.color}`}>
                   <Icon />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800">{service.title}</h3>
-                <p className="text-slate-600 text-sm leading-relaxed">{service.description}</p>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{service.title}</h3>
+                <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">{service.description}</p>
               </div>
               <Link to={service.action} className="pt-2 block">
                 <Button variant="soft" size="md" fullWidth>

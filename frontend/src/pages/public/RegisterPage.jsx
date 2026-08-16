@@ -52,8 +52,8 @@ const RegisterPage = () => {
       <div className="max-w-2xl w-full space-y-6">
         
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold text-slate-800">Create Patient Account</h2>
-          <p className="text-slate-500 text-xs">Join SevaHealth for free digital prescription parsing & doctor access</p>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Create Patient Account</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs">Join SevaHealth for free digital prescription parsing & doctor access</p>
         </div>
 
         <Card className="space-y-6">
@@ -133,13 +133,13 @@ const RegisterPage = () => {
                 required
               />
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                   Gender *
                 </label>
                 <select
                   value={formData.gender}
                   onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 bg-white focus:outline-none focus:border-health-500 focus:ring-2 focus:ring-health-100"
+                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500"
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -147,13 +147,13 @@ const RegisterPage = () => {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                   Language *
                 </label>
                 <select
                   value={formData.language_preference}
                   onChange={(e) => setFormData({ ...formData, language_preference: e.target.value })}
-                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 bg-white focus:outline-none focus:border-health-500 focus:ring-2 focus:ring-health-100"
+                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500"
                 >
                   <option value="Hindi">Hindi</option>
                   <option value="Punjabi">Punjabi</option>
@@ -182,9 +182,9 @@ const RegisterPage = () => {
 
         </Card>
 
-        <p className="text-center text-xs text-slate-500">
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400">
           Already registered?{' '}
-          <Link to="/login" className="text-health-600 font-bold hover:underline">
+          <Link to="/login" className="text-health-600 dark:text-health-400 font-bold hover:underline">
             Sign In Here
           </Link>
         </p>

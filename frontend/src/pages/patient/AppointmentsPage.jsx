@@ -61,13 +61,13 @@ const AppointmentsPage = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       
-      <div className="flex items-center space-x-4 pb-4 border-b border-slate-100">
+      <div className="flex items-center space-x-4 pb-4 border-b border-slate-100 dark:border-slate-800">
         <div className="w-14 h-14 rounded-2xl bg-tealSoft-500 text-white flex items-center justify-center text-2xl shadow-md">
           <FaCalendarAlt />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Tele-Doctor Consultations</h1>
-          <p className="text-slate-500 text-xs">Book direct video or voice calls with qualified medical officers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Tele-Doctor Consultations</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-xs">Book direct video or voice calls with qualified medical officers</p>
         </div>
       </div>
 
@@ -76,20 +76,20 @@ const AppointmentsPage = () => {
         {doctors.map((doc) => (
           <Card key={doc.id} hoverable className="space-y-4 flex flex-col justify-between">
             <div className="space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-health-50 text-health-600 flex items-center justify-center text-2xl font-bold">
+              <div className="w-14 h-14 rounded-2xl bg-health-50 dark:bg-health-950/60 text-health-600 dark:text-health-400 flex items-center justify-center text-2xl font-bold">
                 <FaUserMd />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-base">{doc.name}</h3>
-                <p className="text-xs text-health-600 font-semibold">{doc.specialization}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{doc.qualification} • {doc.experience}</p>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">{doc.name}</h3>
+                <p className="text-xs text-health-600 dark:text-health-400 font-semibold">{doc.specialization}</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">{doc.qualification} • {doc.experience}</p>
               </div>
 
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100 dark:border-slate-700/80">
                 <span className="flex items-center text-amber-500 font-bold">
                   <FaStar className="mr-1" /> {doc.rating}
                 </span>
-                <span className="font-bold text-slate-700">{doc.fee}</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{doc.fee}</span>
               </div>
             </div>
 
@@ -116,9 +116,9 @@ const AppointmentsPage = () => {
           <form onSubmit={handleConfirmBooking} className="space-y-4">
             {booked && <Alert type="success" message="Appointment Booked Successfully! Confirmation sent via SMS." />}
 
-            <div className="p-3 bg-health-50 rounded-2xl border border-health-100 text-xs space-y-1">
-              <p className="font-bold text-health-800">{selectedDoctor.name}</p>
-              <p className="text-health-700">{selectedDoctor.specialization}</p>
+            <div className="p-3 bg-health-50 dark:bg-[#1E293B] rounded-2xl border border-health-100 dark:border-slate-700 text-xs space-y-1">
+              <p className="font-bold text-health-800 dark:text-slate-100">{selectedDoctor.name}</p>
+              <p className="text-health-700 dark:text-health-300">{selectedDoctor.specialization}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -130,13 +130,13 @@ const AppointmentsPage = () => {
                 required
               />
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                   Time Slot *
                 </label>
                 <select
                   value={bookingForm.time}
                   onChange={(e) => setBookingForm({ ...bookingForm, time: e.target.value })}
-                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 bg-white"
+                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500"
                 >
                   <option value="10:30 AM">10:30 AM (Morning)</option>
                   <option value="02:00 PM">02:00 PM (Afternoon)</option>
@@ -146,14 +146,14 @@ const AppointmentsPage = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                 Symptoms / Health Reason
               </label>
               <textarea
                 rows="3"
                 value={bookingForm.reason}
                 onChange={(e) => setBookingForm({ ...bookingForm, reason: e.target.value })}
-                className="w-full p-3 text-sm rounded-2xl border border-slate-200"
+                className="w-full p-3 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500"
               ></textarea>
             </div>
 

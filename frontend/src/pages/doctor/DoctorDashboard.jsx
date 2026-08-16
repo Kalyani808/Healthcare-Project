@@ -15,10 +15,10 @@ import {
 
 const DoctorDashboard = () => {
   const stats = [
-    { label: "Today's Consultations", value: '6 Patients', color: 'bg-health-50 text-health-600', icon: FaCalendarCheck },
-    { label: 'Active Rural Patients', value: '142', color: 'bg-mint-50 text-mint-600', icon: FaUsers },
-    { label: 'Prescriptions Parsed', value: '89', color: 'bg-tealSoft-50 text-tealSoft-600', icon: FaNotesMedical },
-    { label: 'Doctor Rating', value: '4.9 ⭐', color: 'bg-amber-50 text-amber-600', icon: FaUserMd },
+    { label: "Today's Consultations", value: '6 Patients', color: 'bg-health-50 dark:bg-health-950/60 text-health-600 dark:text-health-400', icon: FaCalendarCheck },
+    { label: 'Active Rural Patients', value: '142', color: 'bg-mint-50 dark:bg-mint-950/60 text-mint-600 dark:text-mint-400', icon: FaUsers },
+    { label: 'Prescriptions Parsed', value: '89', color: 'bg-tealSoft-50 dark:bg-tealSoft-950/60 text-tealSoft-600 dark:text-tealSoft-400', icon: FaNotesMedical },
+    { label: 'Doctor Rating', value: '4.9 ⭐', color: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400', icon: FaUserMd },
   ];
 
   const todayQueue = [
@@ -50,8 +50,8 @@ const DoctorDashboard = () => {
                 <Icon />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase">{s.label}</p>
-                <h3 className="text-xl font-bold text-slate-800">{s.value}</h3>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">{s.label}</p>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">{s.value}</h3>
               </div>
             </Card>
           );
@@ -60,26 +60,26 @@ const DoctorDashboard = () => {
 
       {/* Appointment Queue */}
       <Card className="space-y-4">
-        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800 text-base flex items-center space-x-2">
+        <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-700/80">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base flex items-center space-x-2">
             <FaClock className="text-health-500" />
             <span>Today's Consultation Schedule</span>
           </h3>
-          <Link to="/doctor/appointments" className="text-xs text-health-600 font-semibold hover:underline">
+          <Link to="/doctor/appointments" className="text-xs text-health-600 dark:text-health-400 font-semibold hover:underline">
             Manage Full Queue
           </Link>
         </div>
 
         <div className="space-y-3">
           {todayQueue.map((patient) => (
-            <div key={patient.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl gap-4">
+            <div key={patient.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 dark:bg-[#1E293B] border border-slate-100 dark:border-slate-700/80 rounded-2xl gap-4">
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
-                  <h4 className="font-bold text-slate-800 text-sm">{patient.name}</h4>
-                  <span className="text-[11px] text-slate-500">({patient.gender}, {patient.age} yrs)</span>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm">{patient.name}</h4>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">({patient.gender}, {patient.age} yrs)</span>
                 </div>
-                <p className="text-xs text-slate-500">{patient.village} • Time: <strong>{patient.time}</strong></p>
-                <p className="text-xs text-health-700 font-medium">Reason: {patient.reason}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{patient.village} • Time: <strong className="text-slate-700 dark:text-slate-200">{patient.time}</strong></p>
+                <p className="text-xs text-health-700 dark:text-health-300 font-medium">Reason: {patient.reason}</p>
               </div>
 
               <div className="flex items-center space-x-2">

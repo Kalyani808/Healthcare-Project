@@ -372,20 +372,13 @@ const UploadDocument = () => {
 
               {/* Simple Processing Indicator */}
               {uploading && (
-<<<<<<< HEAD
-                <div className="p-3 bg-mint-50/80 border border-mint-200 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold text-mint-900">
-                  <div className="w-4 h-4 border-2 border-mint-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span>Processing prescription & extracting medicines...</span>
-=======
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <span>Extracting medicines with ICR Vision...</span>
+                    <span>{stageText || 'Extracting medicines with GLM-OCR + Mistral...'}</span>
                     <span>{progress}%</span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-health-500 to-mint-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                  </div>
->>>>>>> origin/Shreyam-pr
                 </div>
               )}
 

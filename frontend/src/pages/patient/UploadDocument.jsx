@@ -379,6 +379,7 @@ const UploadDocument = () => {
                   </div>
                   <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-health-500 to-mint-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                  </div>
                 </div>
               )}
 
@@ -399,12 +400,7 @@ const UploadDocument = () => {
 
         {/* RIGHT SIDE (50% Width Container) */}
         <div className="lg:col-span-1 space-y-4">
-<<<<<<< HEAD
-          <Card className={`h-[560px] flex flex-col justify-between ${analyzed ? 'border-mint-200 bg-mint-50/10' : 'bg-slate-50 border-slate-100'}`}>
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center space-x-2 text-slate-800 font-bold text-base">
-=======
-          <Card className={`h-[520px] flex flex-col justify-between ${analyzed ? 'border-mint-200 dark:border-slate-700/80 bg-mint-50/10 dark:bg-[#172033]' : 'bg-slate-50 dark:bg-[#172033] border-slate-100 dark:border-slate-700/80'}`}>
+          <Card className={`h-[560px] flex flex-col justify-between ${analyzed ? 'border-mint-200 dark:border-slate-700/80 bg-mint-50/10 dark:bg-[#172033]' : 'bg-slate-50 dark:bg-[#172033] border-slate-100 dark:border-slate-700/80'}`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-700/80">
               <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-bold text-base">
                 <FaRobot className="text-tealSoft-500 text-xl" />
@@ -511,7 +507,6 @@ const UploadDocument = () => {
                     <span>{showRawDetails ? 'Hide Full Raw Text Details' : 'Show Full Raw Text Details'}</span>
                     {showRawDetails ? <FaChevronUp /> : <FaChevronDown />}
                   </button>
->>>>>>> origin/Shreyam-pr
 
                   {showRawDetails && (
                     <div className="p-2 bg-slate-900 text-slate-200 font-mono text-[10px] rounded-xl max-h-24 overflow-y-auto whitespace-pre-wrap">

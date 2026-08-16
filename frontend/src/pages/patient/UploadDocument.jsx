@@ -307,23 +307,12 @@ const UploadDocument = () => {
                 />
 
                 {!preview ? (
-<<<<<<< HEAD
-                  <label className="border-2 border-dashed border-health-200 hover:border-health-400 bg-health-50/30 hover:bg-health-50 rounded-2xl h-[290px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-4">
-                    <div className="w-16 h-16 rounded-2xl bg-health-100 text-health-600 flex items-center justify-center text-3xl">
-                      <FaCloudUploadAlt />
-                    </div>
-                    <div className="text-center space-y-1">
-                      <p className="text-sm font-semibold text-slate-700">Click to select prescription image</p>
-                      <p className="text-xs text-slate-400">Supports PNG, JPG, JPEG (100% Offline Local Processing)</p>
-=======
-                  <label className="border-2 border-dashed border-health-200 dark:border-slate-700 hover:border-health-400 dark:hover:border-health-500 bg-health-50/30 dark:bg-[#1E293B]/40 hover:bg-health-50 dark:hover:bg-[#1E293B]/80 rounded-2xl h-[280px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-4">
+                  <label className="border-2 border-dashed border-health-200 dark:border-slate-700 hover:border-health-400 dark:hover:border-health-500 bg-health-50/30 dark:bg-[#1E293B]/40 hover:bg-health-50 dark:hover:bg-[#1E293B]/80 rounded-2xl h-[290px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-4">
                     <div className="w-16 h-16 rounded-2xl bg-health-100 dark:bg-slate-700 text-health-600 dark:text-health-400 flex items-center justify-center text-3xl">
                       <FaCloudUploadAlt />
                     </div>
                     <div className="text-center space-y-1">
                       <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Click to select prescription image</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-400">Supports PNG, JPG, JPEG (Max 10MB)</p>
->>>>>>> origin/Shreyam-pr
                     </div>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                   </label>
@@ -339,11 +328,7 @@ const UploadDocument = () => {
                         <FaTimes /> <span>Remove File</span>
                       </button>
                     </div>
-<<<<<<< HEAD
-                    <div className="relative bg-slate-900/5 rounded-2xl border border-slate-200 h-[290px] flex items-center justify-center p-2 overflow-hidden group">
-=======
-                    <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[280px] flex items-center justify-center p-2 overflow-hidden group">
->>>>>>> origin/Shreyam-pr
+                    <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[290px] flex items-center justify-center p-2 overflow-hidden group">
                       <img
                         src={preview}
                         alt="Prescription Preview"

@@ -8,12 +8,11 @@ import {
   FaFileUpload, 
   FaCalendarCheck, 
   FaHistory, 
-  FaHeartbeat, 
   FaSmile, 
   FaArrowRight, 
-  FaCheckCircle,
   FaNotesMedical,
-  FaLightbulb
+  FaLightbulb,
+  FaFileMedical
 } from 'react-icons/fa';
 
 const PatientDashboard = () => {
@@ -43,10 +42,10 @@ const PatientDashboard = () => {
         </div>
       </div>
 
-      {/* Quick Action Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Quick Action Grid with Health Reports Link */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Link to="/patient/ai-assistant">
-          <Card hoverable className="p-5 flex items-center space-x-4 border-mint-100 bg-mint-50/40">
+          <Card hoverable className="p-5 flex items-center space-x-4 border-mint-100 bg-mint-50/40 h-full">
             <div className="w-12 h-12 rounded-2xl bg-mint-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
               <FaRobot />
             </div>
@@ -58,7 +57,7 @@ const PatientDashboard = () => {
         </Link>
 
         <Link to="/patient/upload-document">
-          <Card hoverable className="p-5 flex items-center space-x-4 border-health-100 bg-health-50/40">
+          <Card hoverable className="p-5 flex items-center space-x-4 border-health-100 bg-health-50/40 h-full">
             <div className="w-12 h-12 rounded-2xl bg-health-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
               <FaFileUpload />
             </div>
@@ -69,8 +68,20 @@ const PatientDashboard = () => {
           </Card>
         </Link>
 
+        <Link to="/patient/health-reports">
+          <Card hoverable className="p-5 flex items-center space-x-4 border-amber-100 bg-amber-50/40 h-full">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
+              <FaFileMedical />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 text-sm">Health Reports</h4>
+              <p className="text-[11px] text-slate-500">Lab & vital diagnostics</p>
+            </div>
+          </Card>
+        </Link>
+
         <Link to="/patient/appointments">
-          <Card hoverable className="p-5 flex items-center space-x-4 border-tealSoft-100 bg-tealSoft-50/40">
+          <Card hoverable className="p-5 flex items-center space-x-4 border-tealSoft-100 bg-tealSoft-50/40 h-full">
             <div className="w-12 h-12 rounded-2xl bg-tealSoft-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
               <FaCalendarCheck />
             </div>
@@ -82,7 +93,7 @@ const PatientDashboard = () => {
         </Link>
 
         <Link to="/patient/document-history">
-          <Card hoverable className="p-5 flex items-center space-x-4 border-slate-100 bg-white">
+          <Card hoverable className="p-5 flex items-center space-x-4 border-slate-100 bg-white h-full">
             <div className="w-12 h-12 rounded-2xl bg-slate-700 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
               <FaHistory />
             </div>
@@ -161,7 +172,7 @@ const PatientDashboard = () => {
 
         </div>
 
-        {/* Right 4 cols: Rural Health Tips & Assistant Prompt */}
+        {/* Right 4 cols: Rural Health Tips & Emergency Box */}
         <div className="lg:col-span-4 space-y-6">
           
           {/* Health Tip Card */}

@@ -52,9 +52,6 @@ const RegisterPage = () => {
       <div className="max-w-2xl w-full space-y-6">
         
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-health-500 to-mint-400 text-white flex items-center justify-center text-2xl mx-auto shadow-md shadow-health-200">
-            <FaHeartbeat className="animate-pulse" />
-          </div>
           <h2 className="text-2xl font-bold text-slate-800">Create Patient Account</h2>
           <p className="text-slate-500 text-xs">Join SevaHealth for free digital prescription parsing & doctor access</p>
         </div>

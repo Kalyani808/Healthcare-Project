@@ -11,7 +11,6 @@ import {
   FaFileMedical, 
   FaUserMd, 
   FaUsers, 
-  FaCog 
 } from 'react-icons/fa';
 
 const Sidebar = () => {
@@ -19,7 +18,7 @@ const Sidebar = () => {
 
   const patientLinks = [
     { to: '/patient/dashboard', label: 'Overview', icon: FaChartLine },
-    { to: '/patient/profile', label: 'My Health Profile', icon: FaUser },
+    { to: '/patient/profile?mode=view', label: 'My Health Profile', icon: FaUser },
     { to: '/patient/ai-assistant', label: 'AI Health Companion', icon: FaRobot, badge: 'Smart' },
     { to: '/patient/upload-document', label: 'Upload Medical Doc', icon: FaFileUpload },
     { to: '/patient/document-history', label: 'Medical Document Vault', icon: FaHistory },
@@ -29,7 +28,7 @@ const Sidebar = () => {
 
   const doctorLinks = [
     { to: '/doctor/dashboard', label: 'Doctor Overview', icon: FaChartLine },
-    { to: '/doctor/profile', label: 'Doctor Profile', icon: FaUserMd },
+    { to: '/doctor/profile?mode=view', label: 'Doctor Profile', icon: FaUserMd },
     { to: '/doctor/patients', label: 'Patient Registry', icon: FaUsers },
     { to: '/doctor/appointments', label: 'Appointments Queue', icon: FaCalendarAlt },
   ];

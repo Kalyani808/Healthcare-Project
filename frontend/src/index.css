@@ -1,21 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 @layer base {
   body {
-    font-family: 'Inter', sans-serif;
-    color: #1e293b;
-  }
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Poppins', sans-serif;
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
   }
 }
 
-/* Custom scrollbars for clean aesthetic */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: #f1f5f9;
@@ -26,14 +22,4 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-}
-
-/* Soft pulse animation for AI companion */
-@keyframes softGlow {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.03); }
-}
-
-.animate-soft-glow {
-  animation: softGlow 4s ease-in-out infinite;
 }

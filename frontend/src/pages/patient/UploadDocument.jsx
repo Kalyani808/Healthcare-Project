@@ -277,13 +277,8 @@ const UploadDocument = () => {
           <FaFileUpload />
         </div>
         <div>
-<<<<<<< HEAD
-          <h1 className="text-2xl font-bold text-slate-800">Upload Medical Document</h1>
-          <p className="text-slate-500 text-xs">Upload prescription images for 100% local offline AI medicine extraction (GLM-OCR + Mistral 7B)</p>
-=======
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Upload Medical Document</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs">Upload prescription images for instant AI medicine extraction & regional care guidance</p>
->>>>>>> origin/Shreyam-pr
+          <p className="text-slate-500 dark:text-slate-400 text-xs">Upload prescription images for 100% local offline AI medicine extraction (GLM-OCR + Mistral 7B)</p>
         </div>
       </div>
 

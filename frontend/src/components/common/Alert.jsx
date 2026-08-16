@@ -4,24 +4,24 @@ import { FaCheckCircle, FaExclamationCircle, FaInfoCircle, FaExclamationTriangle
 const Alert = ({ type = 'info', message, title }) => {
   const styles = {
     success: {
-      bg: 'bg-mint-50 border-mint-200 text-mint-900',
+      bg: 'bg-mint-50 dark:bg-mint-950/40 border-mint-200 dark:border-mint-800/60 text-mint-900 dark:text-mint-200',
       icon: FaCheckCircle,
-      iconColor: 'text-mint-500',
+      iconColor: 'text-mint-500 dark:text-mint-400',
     },
     error: {
-      bg: 'bg-rose-50 border-rose-200 text-rose-900',
+      bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-900 dark:text-rose-200',
       icon: FaExclamationCircle,
-      iconColor: 'text-rose-500',
+      iconColor: 'text-rose-500 dark:text-rose-400',
     },
     warning: {
-      bg: 'bg-amber-50 border-amber-200 text-amber-900',
+      bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200',
       icon: FaExclamationTriangle,
-      iconColor: 'text-amber-500',
+      iconColor: 'text-amber-500 dark:text-amber-400',
     },
     info: {
-      bg: 'bg-health-50 border-health-200 text-health-900',
+      bg: 'bg-health-50 dark:bg-health-950/40 border-health-200 dark:border-health-800/60 text-health-900 dark:text-health-200',
       icon: FaInfoCircle,
-      iconColor: 'text-health-500',
+      iconColor: 'text-health-500 dark:text-health-400',
     },
   };
 

@@ -1,124 +1,41 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaHeartbeat, FaPhoneAlt, FaShieldAlt, FaMapMarkerAlt, FaEnvelope } from 'react-icons/fa';
+import { FaHeartbeat, FaPhoneAlt } from 'react-icons/fa';
 
 const Footer = () => {
   return (
-    <footer className="bg-gradient-to-b from-white to-health-50/50 border-t border-health-100 pt-16 pb-12">
+    <footer className="bg-white dark:bg-[#0B1220] border-t border-slate-100 dark:border-slate-800 py-8 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           
-          {/* Brand Col */}
-          <div className="space-y-4 md:col-span-1">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-health-500 flex items-center justify-center text-white shadow-md">
-                <FaHeartbeat className="text-xl" />
-              </div>
-              <span className="text-2xl font-bold text-slate-800 tracking-tight">
-                SevaHealth
-              </span>
+          {/* Brand */}
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-health-500 to-mint-400 flex items-center justify-center text-white shadow-sm">
+              <FaHeartbeat className="text-lg" />
             </div>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Empowering rural communities with compassionate, AI-driven digital healthcare and direct access to qualified medical practitioners.
-            </p>
-            <div className="flex items-center space-x-2 text-xs text-mint-700 bg-mint-50 border border-mint-100 px-3 py-1.5 rounded-lg w-fit">
-              <FaShieldAlt className="text-mint-500" />
-              <span>Government Approved Tele-Health Standards</span>
+            <div>
+              <span className="text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight">SevaHealth</span>
+              <span className="block text-[10px] text-slate-400 dark:text-slate-400 font-medium -mt-1">Rural Digital Health</span>
             </div>
           </div>
 
-          {/* Quick Links */}
-          <div>
-            <h4 className="text-slate-800 font-semibold text-sm uppercase tracking-wider mb-4">
-              Patient Care
-            </h4>
-            <ul className="space-y-2.5 text-sm text-slate-600">
-              <li>
-                <Link to="/patient/ai-assistant" className="hover:text-health-600 transition-colors">
-                  AI Symptom Companion
-                </Link>
-              </li>
-              <li>
-                <Link to="/patient/upload-document" className="hover:text-health-600 transition-colors">
-                  Upload Prescription
-                </Link>
-              </li>
-              <li>
-                <Link to="/services" className="hover:text-health-600 transition-colors">
-                  Tele-Consultations
-                </Link>
-              </li>
-              <li>
-                <Link to="/patient/document-history" className="hover:text-health-600 transition-colors">
-                  Medical Record Vault
-                </Link>
-              </li>
-            </ul>
+          {/* Essential Quick Links */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <Link to="/" className="hover:text-health-600 dark:hover:text-health-400 transition-colors">Home</Link>
+            <Link to="/about" className="hover:text-health-600 dark:hover:text-health-400 transition-colors">About Us</Link>
+            <Link to="/services" className="hover:text-health-600 dark:hover:text-health-400 transition-colors">Services</Link>
+            <Link to="/contact" className="hover:text-health-600 dark:hover:text-health-400 transition-colors">Contact</Link>
           </div>
 
-          {/* Rural Outlets */}
-          <div>
-            <h4 className="text-slate-800 font-semibold text-sm uppercase tracking-wider mb-4">
-              Community Outreach
-            </h4>
-            <ul className="space-y-2.5 text-sm text-slate-600">
-              <li>
-                <Link to="/about" className="hover:text-health-600 transition-colors">
-                  Village Wellness Kiosks
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact" className="hover:text-health-600 transition-colors">
-                  Find Nearest Health Center
-                </Link>
-              </li>
-              <li>
-                <Link to="/doctor/profile" className="hover:text-health-600 transition-colors">
-                  Join as Doctor Volunteer
-                </Link>
-              </li>
-              <li>
-                <Link to="/about" className="hover:text-health-600 transition-colors">
-                  Multilingual Voice Assistant
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Emergency Helplines */}
-          <div>
-            <h4 className="text-slate-800 font-semibold text-sm uppercase tracking-wider mb-4">
-              24/7 Rural Helpline
-            </h4>
-            <div className="space-y-3">
-              <a
-                href="tel:104"
-                className="flex items-center space-x-3 p-3 bg-white border border-health-200 rounded-2xl shadow-sm hover:border-health-400 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center group-hover:bg-rose-500 group-hover:text-white transition-colors">
-                  <FaPhoneAlt />
-                </div>
-                <div>
-                  <span className="block text-xs font-medium text-slate-500">Free Health Helpline</span>
-                  <span className="text-lg font-bold text-slate-800">104 / 108</span>
-                </div>
-              </a>
-              <div className="flex items-center space-x-2 text-xs text-slate-500 pt-1">
-                <FaMapMarkerAlt className="text-health-500" />
-                <span>Serving 500+ Rural Districts</span>
-              </div>
+          {/* Compact Helpline & Copyright */}
+          <div className="flex items-center space-x-4 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 rounded-xl font-bold">
+              <FaPhoneAlt className="text-xs" />
+              <span>Helpline: 104 / 108</span>
             </div>
+            <span>© {new Date().getFullYear()} SevaHealth</span>
           </div>
 
-        </div>
-
-        <div className="mt-12 pt-8 border-t border-slate-200/60 text-center text-xs text-slate-500 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-          <p>© {new Date().getFullYear()} SevaHealth Rural Care Initiative. All rights reserved.</p>
-          <div className="flex space-x-6">
-            <span className="hover:text-health-600 cursor-pointer">Privacy Guarantee</span>
-            <span className="hover:text-health-600 cursor-pointer">Patient Rights</span>
-            <span className="hover:text-health-600 cursor-pointer">Accessibility First</span>
-          </div>
         </div>
       </div>
     </footer>

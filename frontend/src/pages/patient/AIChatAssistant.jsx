@@ -63,18 +63,18 @@ const AIChatAssistant = () => {
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       
       {/* Header Banner */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center space-x-4">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-mint-500 to-tealSoft-500 text-white flex items-center justify-center text-2xl shadow-md">
             <FaRobot />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">AI Health Sahayak</h1>
-            <p className="text-slate-500 text-xs">Multilingual voice & text symptom companion for rural families</p>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">AI Health Sahayak</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-xs">Multilingual voice & text symptom companion for rural families</p>
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center space-x-2 text-xs font-semibold text-mint-700 bg-mint-50 px-3 py-1.5 rounded-full border border-mint-100">
+        <div className="hidden sm:flex items-center space-x-2 text-xs font-semibold text-mint-700 dark:text-mint-300 bg-mint-50 dark:bg-mint-950/60 px-3 py-1.5 rounded-full border border-mint-100 dark:border-mint-800/60">
           <span className="w-2 h-2 rounded-full bg-mint-500 animate-pulse"></span>
           <span>Online & Ready</span>
         </div>
@@ -86,7 +86,7 @@ const AIChatAssistant = () => {
           <button
             key={idx}
             onClick={() => handleSend(q)}
-            className="text-xs bg-white text-slate-600 hover:text-health-700 hover:bg-health-50 border border-slate-200 hover:border-health-200 px-3.5 py-1.5 rounded-full transition-all shadow-sm"
+            className="text-xs bg-white dark:bg-[#1E293B] text-slate-600 dark:text-slate-300 hover:text-health-700 dark:hover:text-health-300 hover:bg-health-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-health-200 dark:hover:border-slate-600 px-3.5 py-1.5 rounded-full transition-all shadow-sm"
           >
             💡 {q}
           </button>
@@ -94,7 +94,7 @@ const AIChatAssistant = () => {
       </div>
 
       {/* Chat Messages Window */}
-      <Card className="h-[480px] flex flex-col justify-between p-4 bg-gradient-to-b from-slate-50/50 to-white">
+      <Card className="h-[480px] flex flex-col justify-between p-4 bg-gradient-to-b from-slate-50/50 to-white dark:from-[#0F172A] dark:to-[#172033]">
         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
           {messages.map((msg) => (
             <div
@@ -115,11 +115,11 @@ const AIChatAssistant = () => {
                 className={`max-w-md p-4 rounded-3xl text-sm leading-relaxed ${
                   msg.sender === 'user'
                     ? 'bg-gradient-to-r from-health-500 to-health-600 text-white rounded-tr-none shadow-sm'
-                    : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none shadow-sm'
+                    : 'bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700/80 rounded-tl-none shadow-sm'
                 }`}
               >
                 <p>{msg.text}</p>
-                <span className={`block text-[10px] mt-1.5 ${msg.sender === 'user' ? 'text-health-100 text-right' : 'text-slate-400'}`}>
+                <span className={`block text-[10px] mt-1.5 ${msg.sender === 'user' ? 'text-health-100 text-right' : 'text-slate-400 dark:text-slate-400'}`}>
                   {msg.time}
                 </span>
               </div>
@@ -127,20 +127,20 @@ const AIChatAssistant = () => {
           ))}
 
           {isTyping && (
-            <div className="flex items-center space-x-2 text-xs text-slate-400 pl-12">
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            <div className="flex items-center space-x-2 text-xs text-slate-400 dark:text-slate-400 pl-12">
+              <span className="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+              <span className="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full animate-bounce [animation-delay:0.4s]"></span>
               <span>Sahayak is thinking...</span>
             </div>
           )}
         </div>
 
         {/* Input Bar */}
-        <div className="pt-4 border-t border-slate-100 flex items-center space-x-2">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-700/80 flex items-center space-x-2">
           <button
             onClick={() => alert('Voice input activated. Speak in Hindi or your local dialect...')}
-            className="p-3 text-mint-600 bg-mint-50 hover:bg-mint-100 rounded-2xl transition-colors"
+            className="p-3 text-mint-600 dark:text-mint-400 bg-mint-50 dark:bg-mint-950/60 hover:bg-mint-100 dark:hover:bg-mint-900/60 rounded-2xl transition-colors"
             title="Voice Input"
           >
             <FaMicrophone className="text-lg" />
@@ -152,7 +152,7 @@ const AIChatAssistant = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            className="flex-1 py-3 px-4 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:border-health-500"
+            className="flex-1 py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-health-500 dark:focus:border-health-400"
           />
 
           <Button variant="mint" size="md" icon={FaPaperPlane} onClick={() => handleSend()}>

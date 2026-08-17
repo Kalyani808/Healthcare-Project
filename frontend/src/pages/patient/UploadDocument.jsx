@@ -6,7 +6,7 @@ import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
 import {
   FaFileUpload, FaCloudUploadAlt, FaRobot, FaTimes, FaTable, FaEye,
-  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle
+  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaPills
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
@@ -232,7 +232,7 @@ const UploadDocument = () => {
               extraction_method: statusData.extraction_method || 'ollama_mistral_json',
               quality_metrics: statusData.quality_metrics || {},
               requires_review: statusData.requires_manual_review,
-              db_doc: response.data,
+              db_doc: response ? response.data : null,
             });
           } else if (statusData.status === 'failed') {
             clearInterval(pollInterval);
@@ -289,10 +289,8 @@ const UploadDocument = () => {
         />
       )}
 
-      {/* Equal 50/50 Grid Container */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-        {/* LEFT SIDE (50% Width Container) */}
         <div className="lg:col-span-1 space-y-4">
           <Card className="h-[560px] flex flex-col justify-between space-y-4 overflow-hidden">
             <form onSubmit={handleUpload} className="h-full flex flex-col justify-between space-y-3">
@@ -348,12 +346,10 @@ const UploadDocument = () => {
                 )}
               </div>
 
-              {/* Inline Error Banner */}
               {inlineError && (
                 <Alert type="error" message={inlineError} className="text-xs" />
               )}
 
-              {/* Extended Processing Non-Blocking Banner */}
               {isExtendedProcessing && !analyzed && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
                   <div className="flex items-center space-x-2 font-bold">
@@ -370,7 +366,6 @@ const UploadDocument = () => {
                 </div>
               )}
 
-              {/* Simple Processing Indicator */}
               {uploading && (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
@@ -398,7 +393,6 @@ const UploadDocument = () => {
           </Card>
         </div>
 
-        {/* RIGHT SIDE (50% Width Container) */}
         <div className="lg:col-span-1 space-y-4">
           <Card className={`h-[560px] flex flex-col justify-between ${analyzed ? 'border-mint-200 dark:border-slate-700/80 bg-mint-50/10 dark:bg-[#172033]' : 'bg-slate-50 dark:bg-[#172033] border-slate-100 dark:border-slate-700/80'}`}>
             <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-700/80">
@@ -408,7 +402,7 @@ const UploadDocument = () => {
               </div>
               {analyzed && (
                 <span className="text-[11px] font-semibold text-mint-700 dark:text-mint-300 bg-mint-100 dark:bg-slate-800 px-2.5 py-1 rounded-full flex items-center space-x-1">
-                  <FaPills /> <span>{analyzed.medicines_only?.length || 0} Medicines Found</span>
+                  <FaPills /> <span>{(analyzed.medicines ? analyzed.medicines.length : 0) + (analyzed.medicines_only ? analyzed.medicines_only.length : 0)} Medicines Found</span>
                 </span>
               )}
             </div>
@@ -422,14 +416,70 @@ const UploadDocument = () => {
             ) : (
               <div className="flex-1 flex flex-col justify-between pt-2 space-y-2.5 overflow-hidden">
 
-                {/* Confidence & Model Badge */}
                 {analyzed.confidence >= 0.75 ? (
-                  <Alert type="success" message={`✓ Local AI High Confidence (${(analyzed.confidence * 100).toFixed(0)}%) — Extracted via ${analyzed.extraction_method || 'GLM-OCR + Mistral'}.`} />
+                  <Alert type="success" message={`✓ High Confidence Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — Method: ${analyzed.extraction_method || 'Vision LLM'}.`} />
                 ) : (
-                  <Alert type="warning" message={`⚠️ Local AI Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify candidate items with doctor.`} />
+                  <Alert type="warning" message={`⚠️ Candidate Items (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify handwritten entries with doctor.`} />
                 )}
 
-                {/* DETECTED MEDICINES CARDS PANEL */}
+                {(analyzed.audio_script || analyzed.audio_scripts) && (
+                  <div className="p-2.5 bg-mint-50/80 dark:bg-[#1E293B] border border-mint-200 dark:border-slate-700 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-mint-900 dark:text-mint-200">
+                      <span className="flex items-center space-x-1.5">
+                        <FaVolumeUp className="text-mint-600 dark:text-mint-400" />
+                        <span>Voice Guidance Player</span>
+                      </span>
+                      <select
+                        value={audioLang}
+                        onChange={(e) => setAudioLang(e.target.value)}
+                        className="text-[11px] bg-white dark:bg-[#0B1220] border border-mint-300 dark:border-slate-600 rounded-lg px-2 py-0.5 font-semibold text-slate-700 dark:text-slate-200"
+                      >
+                        <option value="en-US">English (Voice)</option>
+                        <option value="hi-IN">Hindi (हिंदी)</option>
+                        <option value="mr-IN">Marathi (मराठी)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      {!isPlayingAudio ? (
+                        <button
+                          type="button"
+                          onClick={speakAudioScript}
+                          className="px-3 py-1 bg-mint-600 hover:bg-mint-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1 shadow-sm transition-colors"
+                        >
+                          <FaPlay className="text-[10px]" /> <span>Listen Instructions</span>
+                        </button>
+                      ) : isPausedAudio ? (
+                        <button
+                          type="button"
+                          onClick={handleResumeAudio}
+                          className="px-3 py-1 bg-mint-600 hover:bg-mint-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1 shadow-sm transition-colors"
+                        >
+                          <FaPlay className="text-[10px]" /> <span>Resume</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handlePauseAudio}
+                          className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1 shadow-sm transition-colors"
+                        >
+                          <FaPause className="text-[10px]" /> <span>Pause</span>
+                        </button>
+                      )}
+
+                      {isPlayingAudio && (
+                        <button
+                          type="button"
+                          onClick={handleStopAudio}
+                          className="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors"
+                        >
+                          <FaStop className="text-[10px]" /> <span>Stop</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 max-h-[300px]">
                   <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center justify-between">
                     <span>DETECTED MEDICINES</span>
@@ -443,22 +493,22 @@ const UploadDocument = () => {
                         className="p-3 bg-[#f0f9f7] dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-r-xl shadow-sm space-y-1 transition-all hover:bg-white dark:hover:bg-slate-800 hover:shadow-md"
                       >
                         <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-100 text-sm">
-                          <span className="text-slate-900 dark:text-slate-100">{med.medicine || med.raw_line}</span>
+                          <span className="text-slate-900 dark:text-slate-100">{med.medicine || med.name || med.raw_text || med.raw_line}</span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mint-100 dark:bg-slate-700 text-mint-800 dark:text-mint-300 font-bold">
-                            {(med.confidence ? (med.confidence * 100).toFixed(0) : 88)}% match
+                            {(med.confidence ? (med.confidence * 100).toFixed(0) : 95)}% match
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
-                          <span className="truncate pr-2">{med.raw_line || med.found_as}</span>
-                          {med.dosage && (
+                          <span className="truncate pr-2">{med.raw_text || med.raw_line || med.found_as || med.timing}</span>
+                          {(med.dosage || med.strength) && (
                             <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-slate-700 px-2 py-0.5 rounded-md flex-shrink-0">
-                              {med.dosage} {med.frequency ? `• ${med.frequency}` : ''}
+                              {med.dosage || med.strength} {med.frequency ? `• ${med.frequency}` : ''}
                             </span>
                           )}
                         </div>
 
                         {showMedInfo && med.info && (
-                          <div className="pt-1 text-[11px] text-slate-600 flex items-start space-x-1.5 bg-white/80 p-1.5 rounded-lg border border-slate-100">
+                          <div className="pt-1 text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-1.5 bg-white/80 dark:bg-slate-900/60 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
                             <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
                             <span>{med.info}</span>
                           </div>
@@ -485,19 +535,10 @@ const UploadDocument = () => {
                       <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                         {analyzed.quality_reason || "Image quality or handwriting clarity is too low for accurate extraction."}
                       </p>
-                      <div className="bg-white dark:bg-[#0B1220] p-3 rounded-xl border border-amber-200/60 dark:border-slate-700 space-y-1">
-                        <p className="font-bold text-amber-900 dark:text-amber-300">Tips for Clearer Extraction:</p>
-                        <ul className="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-0.5">
-                          <li>Take photo directly from above (avoid tilt)</li>
-                          <li>Ensure bright, even lighting with no glare</li>
-                          <li>Keep prescription flat and in sharp focus</li>
-                        </ul>
-                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Optional Expandable Raw OCR Text Footer */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-700/80">
                   <button
                     type="button"

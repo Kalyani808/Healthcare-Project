@@ -1,11 +1,19 @@
 {
     "git.ignoreLimitWarning": true,
-    "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+    "python.interpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
     "python.analysis.extraPaths": [
+        "${workspaceFolder}/venv/Lib/site-packages",
         "${workspaceFolder}"
     ],
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingImports": "none",
         "reportMissingModuleSource": "none"
-    }
+    },
+    "pyrefly.searchPaths": [
+        "${workspaceFolder}/venv/Lib/site-packages",
+        "${workspaceFolder}"
+    ],
+    "pyrefly.pythonPath": "${workspaceFolder}/venv/Scripts/python.exe"
 }

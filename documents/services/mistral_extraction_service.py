@@ -36,6 +36,50 @@ class MistralExtractionService:
         if not raw_ocr_text or not raw_ocr_text.strip():
             return [], "No OCR text provided for extraction."
 
+        # 0. Check if raw_ocr_text is already structured JSON from OpenRouter Vision LLM
+        clean_text = raw_ocr_text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text.removeprefix("```json").removesuffix("```").strip()
+        elif clean_text.startswith("```"):
+            clean_text = clean_text.removeprefix("```").removesuffix("```").strip()
+
+        if clean_text.startswith("{") and "medicines" in clean_text:
+            try:
+                parsed_data = json.loads(clean_text)
+                med_list = parsed_data.get("medicines", [])
+                structured_meds = []
+                for item in med_list:
+                    med_name = item.get("name") or item.get("medicine") or ""
+                    dosage = item.get("dosage") or item.get("strength") or ""
+                    freq = item.get("frequency") or ""
+                    inst = item.get("instructions") or item.get("timing") or ""
+                    conf = float(item.get("confidence") or item.get("confidence_score") or 0.95)
+
+                    raw_parts = [med_name]
+                    if dosage:
+                        raw_parts.append(dosage)
+                    if freq:
+                        raw_parts.append(freq)
+                    if inst:
+                        raw_parts.append(f"({inst})")
+
+                    structured_meds.append({
+                        "name": med_name if conf >= 0.75 else None,
+                        "medicine": med_name,
+                        "raw_text": " ".join(raw_parts),
+                        "strength": dosage,
+                        "dosage": dosage,
+                        "frequency": freq,
+                        "duration": "",
+                        "timing": inst,
+                        "confidence": conf
+                    })
+                if structured_meds:
+                    print(f"[VISION LLM JSON PARSER] Instantly parsed {len(structured_meds)} medicines from Vision LLM JSON response.")
+                    return structured_meds, "vision_llm_json"
+            except Exception as j_err:
+                print(f"[VISION LLM JSON PARSE NOTICE] Falling back to standard LLM parser: {j_err}")
+
         is_running, available_models = self.check_ollama_availability()
         model_name = self.default_model if any(self.default_model in m for m in available_models) else "mistral:latest"
 

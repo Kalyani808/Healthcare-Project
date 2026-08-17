@@ -51,6 +51,31 @@ class GLMOCRService:
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Prescription image file not found: {image_path}")
 
+        # 1. Primary Path: Try OpenRouter Vision LLM whenever OPENROUTER_API_KEY is set
+        try:
+            from decouple import config
+            openrouter_key = os.getenv("OPENROUTER_API_KEY") or config("OPENROUTER_API_KEY", default=None)
+        except Exception:
+            openrouter_key = os.getenv("OPENROUTER_API_KEY")
+
+        if openrouter_key:
+            print("[OCR ROUTER] OPENROUTER_API_KEY detected. Attempting OpenRouter Vision LLM (openai/gpt-4o-mini)...")
+            try:
+                from ..icr_extractor import PrescriptionICR
+                icr = PrescriptionICR()
+                res = icr.extract_text(image_path)
+                if res.get("status") == "success" and res.get("extracted_text"):
+                    print(f"[OPENROUTER SUCCESS] Extracted prescription via Vision LLM in {res.get('processing_time_seconds')}s")
+                    return {
+                        "status": "success",
+                        "text": res.get("extracted_text", ""),
+                        "method": "openrouter_vision_llm",
+                        "model_used": "openai/gpt-4o-mini",
+                        "offline": False
+                    }
+            except Exception as cloud_err:
+                print(f"[OPENROUTER FALLBACK TRIGGER] OpenRouter Vision LLM error ({cloud_err}). Falling back to local Ollama GLM-OCR...")
+
         is_running, available_models = self.check_ollama_availability()
         ocr_model = self.get_preferred_ocr_model(available_models) if is_running else None
 

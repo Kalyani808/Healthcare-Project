@@ -151,3 +151,54 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK
         )
+
+    @action(detail=True, methods=['get'], url_path='audio')
+    def get_document_audio(self, request, pk=None):
+        """
+        Stream high-quality native MP3 audio for the prescription in Telugu, Hindi, Marathi, or English.
+        """
+        from django.http import HttpResponse
+        document = self.get_object()
+        lang = request.query_params.get('lang', 'en').lower()
+        if lang.startswith('te'): lang = 'te'
+        elif lang.startswith('hi'): lang = 'hi'
+        elif lang.startswith('mr'): lang = 'mr'
+        else: lang = 'en'
+
+        from .services.mistral_extraction_service import MistralExtractionService
+        from .services.medicine_info_service import MedicineInfoService
+        from .services.audio_service import AudioService
+        from .audio_generator import generate_audio_for_text
+
+        extracted_str = document.extracted_text or ""
+        mistral_service = MistralExtractionService()
+        raw_meds, _ = mistral_service.extract_medicines(extracted_str)
+        confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
+
+        _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+        script_text = audio_scripts.get(lang, audio_scripts.get('en', ''))
+
+        audio_bytes = generate_audio_for_text(script_text, lang=lang)
+        return HttpResponse(audio_bytes, content_type="audio/mpeg")
+
+    @action(detail=False, methods=['get', 'post'], url_path='speak', permission_classes=[permissions.AllowAny])
+    def speak_text(self, request):
+        """
+        Stream high-quality native MP3 audio for arbitrary text in Telugu, Hindi, Marathi, or English.
+        """
+        from django.http import HttpResponse
+        if request.method == 'POST':
+            text = request.data.get('text', '')
+            lang = request.data.get('lang', 'en').lower()
+        else:
+            text = request.query_params.get('text', '')
+            lang = request.query_params.get('lang', 'en').lower()
+
+        if lang.startswith('te'): lang = 'te'
+        elif lang.startswith('hi'): lang = 'hi'
+        elif lang.startswith('mr'): lang = 'mr'
+        else: lang = 'en'
+
+        from .audio_generator import generate_audio_for_text
+        audio_bytes = generate_audio_for_text(text, lang=lang)
+        return HttpResponse(audio_bytes, content_type="audio/mpeg")

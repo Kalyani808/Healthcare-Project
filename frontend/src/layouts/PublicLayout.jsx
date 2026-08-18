@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
+import FloatingVoiceAssistant from '../components/common/FloatingVoiceAssistant';
 
 const PublicLayout = () => {
   return (
@@ -10,6 +11,7 @@ const PublicLayout = () => {
       <main className="flex-grow">
         <Outlet />
       </main>
+      <FloatingVoiceAssistant />
       <Footer />
     </div>
   );

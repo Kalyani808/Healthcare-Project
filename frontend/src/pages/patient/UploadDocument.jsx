@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
+import { parseDosagePattern } from '../../utils/dosageFormatter';
 import {
   FaFileUpload, FaCloudUploadAlt, FaRobot, FaTimes, FaTable, FaEye,
-  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaPills
+  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaPills, FaSun, FaMoon, FaClock
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
@@ -20,10 +21,13 @@ const UploadDocument = () => {
   const [showRawDetails, setShowRawDetails] = useState(false);
   const [showMedInfo, setShowMedInfo] = useState(true);
 
-  // Audio Speech Synthesis State
+  // Audio Speech Synthesis & Streaming State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isPausedAudio, setIsPausedAudio] = useState(false);
-  const [audioLang, setAudioLang] = useState('en-US');
+  const [audioLang, setAudioLang] = useState(() => {
+    return localStorage.getItem('preferred_language') || 'te-IN';
+  });
+  const audioPlayerRef = useRef(null);
 
   const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
   const [inlineError, setInlineError] = useState(null);
@@ -32,18 +36,19 @@ const UploadDocument = () => {
 
   const handleConfirmVerificationMedicine = (vIdx, item) => {
     const enteredName = verificationInputs[vIdx] !== undefined ? verificationInputs[vIdx] : item.suggested_name;
-    if (!enteredName || !enteredName.strip ? !enteredName : !enteredName.trim()) return;
+    if (!enteredName || !enteredName.trim()) return;
 
     const newConfirmedMed = {
-      name: enteredName.trim().capitalize ? enteredName.trim().capitalize() : enteredName.trim(),
+      name: enteredName.trim().charAt(0).toUpperCase() + enteredName.trim().slice(1),
       medicine: enteredName.trim(),
       strength: item.strength || '',
       frequency: item.frequency || '',
       duration: item.duration || '',
       confidence: 0.95,
       confidence_label: 'High',
-      verification_warning: 'User verified medicine entry',
-      info: `Prescribed medication (${enteredName.trim()}). Verified manually from handwritten prescription stroke.`
+      timing: item.timing || '',
+      dosage: item.strength || item.frequency || '',
+      info: item.suggested_name ? `${item.suggested_name} confirmed by user.` : 'Prescribed medicine confirmed by user.'
     };
 
     setAnalyzed((prev) => {
@@ -66,10 +71,15 @@ const UploadDocument = () => {
   };
 
   useEffect(() => {
-    return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+    const handleLangChange = (e) => {
+      if (e.detail?.lang) {
+        setAudioLang(e.detail.lang);
       }
+    };
+    window.addEventListener('language-changed', handleLangChange);
+    return () => {
+      handleStopAudio();
+      window.removeEventListener('language-changed', handleLangChange);
     };
   }, []);
 
@@ -84,6 +94,7 @@ const UploadDocument = () => {
         setIsExtendedProcessing(false);
         setInlineError(null);
         setAnalyzed({
+          document_id: statusData.document_id || id,
           extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
           medicines: statusData.medicines || [],
           needs_verification: statusData.needs_verification || [],
@@ -108,6 +119,7 @@ const UploadDocument = () => {
   const getAudioScriptForSelectedLang = () => {
     if (!analyzed) return '';
     if (analyzed.audio_scripts) {
+      if (audioLang.startsWith('te')) return analyzed.audio_scripts.te || analyzed.audio_script;
       if (audioLang.startsWith('hi')) return analyzed.audio_scripts.hi || analyzed.audio_script;
       if (audioLang.startsWith('mr')) return analyzed.audio_scripts.mr || analyzed.audio_script;
       return analyzed.audio_scripts.en || analyzed.audio_script;
@@ -115,9 +127,46 @@ const UploadDocument = () => {
     return analyzed.audio_script || '';
   };
 
-  const speakAudioScript = () => {
+  const speakAudioScript = async () => {
+    handleStopAudio();
+    const docId = activeDocId || (analyzed && analyzed.document_id);
+
+    // 1. Try High-Quality Native Backend Audio Streaming (Telugu, Hindi, Marathi, English)
+    if (docId) {
+      try {
+        setIsPlayingAudio(true);
+        setIsPausedAudio(false);
+        const res = await api.get(`/api/documents/${docId}/audio/?lang=${audioLang}`, {
+          responseType: 'blob'
+        });
+        const blobUrl = URL.createObjectURL(res.data);
+        const audio = new Audio(blobUrl);
+        audioPlayerRef.current = audio;
+
+        audio.onended = () => {
+          setIsPlayingAudio(false);
+          setIsPausedAudio(false);
+        };
+        audio.onerror = () => {
+          fallbackSpeechSynthesis();
+        };
+
+        await audio.play();
+        return;
+      } catch (err) {
+        console.warn('Backend audio streaming failed, using fallback:', err);
+      }
+    }
+
+    // 2. Fallback to Web Speech Synthesis
+    fallbackSpeechSynthesis();
+  };
+
+  const fallbackSpeechSynthesis = () => {
     if (!('speechSynthesis' in window)) {
       alert('Text-to-speech is not supported in your browser.');
+      setIsPlayingAudio(false);
+      setIsPausedAudio(false);
       return;
     }
     window.speechSynthesis.cancel();
@@ -144,14 +193,20 @@ const UploadDocument = () => {
   };
 
   const handlePauseAudio = () => {
-    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+    if (audioPlayerRef.current && !audioPlayerRef.current.paused) {
+      audioPlayerRef.current.pause();
+      setIsPausedAudio(true);
+    } else if (window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.pause();
       setIsPausedAudio(true);
     }
   };
 
   const handleResumeAudio = () => {
-    if (window.speechSynthesis.paused) {
+    if (audioPlayerRef.current && audioPlayerRef.current.paused) {
+      audioPlayerRef.current.play();
+      setIsPausedAudio(false);
+    } else if (window.speechSynthesis && window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
       setIsPausedAudio(false);
     } else {
@@ -160,7 +215,14 @@ const UploadDocument = () => {
   };
 
   const handleStopAudio = () => {
-    window.speechSynthesis.cancel();
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0;
+      audioPlayerRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     setIsPlayingAudio(false);
     setIsPausedAudio(false);
   };
@@ -431,9 +493,15 @@ const UploadDocument = () => {
                       </span>
                       <select
                         value={audioLang}
-                        onChange={(e) => setAudioLang(e.target.value)}
-                        className="text-[11px] bg-white dark:bg-[#0B1220] border border-mint-300 dark:border-slate-600 rounded-lg px-2 py-0.5 font-semibold text-slate-700 dark:text-slate-200"
+                        onChange={(e) => {
+                          const newLang = e.target.value;
+                          setAudioLang(newLang);
+                          localStorage.setItem('preferred_language', newLang);
+                          window.dispatchEvent(new CustomEvent('language-changed', { detail: { lang: newLang } }));
+                        }}
+                        className="text-[11px] bg-white dark:bg-[#0B1220] border border-mint-300 dark:border-slate-600 rounded-lg px-2 py-0.5 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
+                        <option value="te-IN">Telugu (తెలుగు)</option>
                         <option value="en-US">English (Voice)</option>
                         <option value="hi-IN">Hindi (हिंदी)</option>
                         <option value="mr-IN">Marathi (मराठी)</option>
@@ -477,8 +545,40 @@ const UploadDocument = () => {
                         </button>
                       )}
                     </div>
+
+                    {/* Multilingual Translation Text Preview */}
+                    {getAudioScriptForSelectedLang() && (
+                      <div className="mt-2 p-2 bg-white/90 dark:bg-[#0B1220] rounded-xl border border-mint-200 dark:border-slate-700 text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed max-h-24 overflow-y-auto shadow-inner">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-mint-800 dark:text-mint-400 mb-1 pb-1 border-b border-slate-100 dark:border-slate-800">
+                          <span>
+                            {audioLang.startsWith('te') ? '🔊 తెలుగు అనువాదం (Telugu)' :
+                             audioLang.startsWith('hi') ? '🔊 हिंदी अनुवाद (Hindi)' :
+                             audioLang.startsWith('mr') ? '🔊 मराठी भाषांतर (Marathi)' :
+                             '🔊 English Audio Guidance'}
+                          </span>
+                          <span className="font-mono text-[9px] text-slate-400">
+                            {isPlayingAudio ? '● Streaming Audio' : 'Ready'}
+                          </span>
+                        </div>
+                        <p className="font-medium">{getAudioScriptForSelectedLang()}</p>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Quick Action: Open AI Voice Assistant */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('open-voice-assistant', {
+                      detail: { prescriptionContext: analyzed.medicines }
+                    }));
+                  }}
+                  className="w-full py-2 px-3 bg-gradient-to-r from-mint-500 to-tealSoft-500 hover:from-mint-600 hover:to-tealSoft-600 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 shadow-sm transition-all"
+                >
+                  <FaRobot className="text-sm" />
+                  <span>💬 Ask Voice Assistant About These Dosages & Timings</span>
+                </button>
 
                 <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 max-h-[300px]">
                   <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center justify-between">
@@ -487,34 +587,83 @@ const UploadDocument = () => {
                   </h4>
 
                   {analyzed.medicines && analyzed.medicines.length > 0 ? (
-                    analyzed.medicines.map((med, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-[#f0f9f7] dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-r-xl shadow-sm space-y-1 transition-all hover:bg-white dark:hover:bg-slate-800 hover:shadow-md"
-                      >
-                        <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-100 text-sm">
-                          <span className="text-slate-900 dark:text-slate-100">{med.medicine || med.name || med.raw_text || med.raw_line}</span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mint-100 dark:bg-slate-700 text-mint-800 dark:text-mint-300 font-bold">
-                            {(med.confidence ? (med.confidence * 100).toFixed(0) : 95)}% match
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
-                          <span className="truncate pr-2">{med.raw_text || med.raw_line || med.found_as || med.timing}</span>
-                          {(med.dosage || med.strength) && (
-                            <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-slate-700 px-2 py-0.5 rounded-md flex-shrink-0">
-                              {med.dosage || med.strength} {med.frequency ? `• ${med.frequency}` : ''}
+                    analyzed.medicines.map((med, idx) => {
+                      const dosageInfo = parseDosagePattern(
+                        med.dosage || med.strength,
+                        med.frequency,
+                        med.timing,
+                        med.duration
+                      );
+
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 bg-[#f0f9f7] dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-r-2xl shadow-sm space-y-2.5 transition-all hover:bg-white dark:hover:bg-slate-800/90 hover:shadow-md"
+                        >
+                          {/* Medicine Header: Name & Match Score */}
+                          <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-100 text-sm">
+                            <span className="text-slate-900 dark:text-slate-100 font-extrabold">{med.medicine || med.name || med.raw_text || med.raw_line}</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mint-100 dark:bg-slate-700 text-mint-800 dark:text-mint-300 font-bold">
+                              {(med.confidence ? (med.confidence * 100).toFixed(0) : 95)}% match
                             </span>
+                          </div>
+
+                          {/* Human-Friendly Dosage Schedule (1 = Take, 0 = Don't Take) */}
+                          {dosageInfo.hasSlotInfo && (
+                            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                              {/* Morning Slot */}
+                              <div className={`px-2 py-1.5 rounded-xl text-center border text-[10px] font-semibold flex flex-col items-center justify-center transition-all ${
+                                dosageInfo.morning.take
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                              }`}>
+                                <span className="text-[9px] font-bold">🌅 Morning</span>
+                                <span className="font-extrabold text-[11px]">
+                                  {dosageInfo.morning.take ? `✓ Take (${dosageInfo.morning.count})` : '✕ 0 (Skip)'}
+                                </span>
+                              </div>
+
+                              {/* Afternoon Slot */}
+                              <div className={`px-2 py-1.5 rounded-xl text-center border text-[10px] font-semibold flex flex-col items-center justify-center transition-all ${
+                                dosageInfo.afternoon.take
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                              }`}>
+                                <span className="text-[9px] font-bold">☀️ Afternoon</span>
+                                <span className="font-extrabold text-[11px]">
+                                  {dosageInfo.afternoon.take ? `✓ Take (${dosageInfo.afternoon.count})` : '✕ 0 (Skip)'}
+                                </span>
+                              </div>
+
+                              {/* Night Slot */}
+                              <div className={`px-2 py-1.5 rounded-xl text-center border text-[10px] font-semibold flex flex-col items-center justify-center transition-all ${
+                                dosageInfo.night.take
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                              }`}>
+                                <span className="text-[9px] font-bold">🌙 Night</span>
+                                <span className="font-extrabold text-[11px]">
+                                  {dosageInfo.night.take ? `✓ Take (${dosageInfo.night.count})` : '✕ 0 (Skip)'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Plain-English Instructions Banner */}
+                          <div className="text-xs text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-slate-900/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800 flex items-start space-x-1.5">
+                            <span className="font-bold text-mint-700 dark:text-mint-400 shrink-0">📋 Instructions:</span>
+                            <span className="font-medium leading-relaxed">{dosageInfo.humanSummary}</span>
+                          </div>
+
+                          {showMedInfo && med.info && (
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-1.5 bg-white/60 dark:bg-slate-900/40 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800/60">
+                              <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
+                              <span>{med.info}</span>
+                            </div>
                           )}
                         </div>
-
-                        {showMedInfo && med.info && (
-                          <div className="pt-1 text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-1.5 bg-white/80 dark:bg-slate-900/60 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                            <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
-                            <span>{med.info}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))
+                      );
+                    })
                   ) : analyzed.medicines_only && analyzed.medicines_only.length > 0 ? (
                     analyzed.medicines_only.map((medStr, idx) => (
                       <div

@@ -12,6 +12,11 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     serializer_class = MedicalDocumentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_permissions(self):
+        if self.action in ['transcribe_voice', 'speak_text', 'ai_chat'] or self.request.path.startswith('/api/voice/transcribe') or self.request.path.startswith('/api/chat'):
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
     def get_queryset(self):
         # each user only sees their own documents
         return MedicalDocument.objects.filter(user=self.request.user).order_by('-uploaded_at')
@@ -202,3 +207,44 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         from .audio_generator import generate_audio_for_text
         audio_bytes = generate_audio_for_text(text, lang=lang)
         return HttpResponse(audio_bytes, content_type="audio/mpeg")
+
+    @action(detail=False, methods=['post'], url_path='transcribe', permission_classes=[permissions.AllowAny])
+    def transcribe_voice(self, request):
+        """
+        POST /api/documents/transcribe/ (or /api/voice/transcribe/)
+        Receives an audio file/blob ('audio' or 'file') recorded locally by browser MediaRecorder API.
+        Transcribes speech and auto-detects language using local faster-whisper on CPU.
+        """
+        audio_file = request.FILES.get('audio') or request.FILES.get('file')
+        if not audio_file:
+            return Response(
+                {"status": "error", "error": "No audio file uploaded in request."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.voice_transcription_service import VoiceTranscriptionService
+        result = VoiceTranscriptionService.transcribe_audio_file(audio_file)
+        
+        if result["status"] == "error":
+            return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='chat', permission_classes=[permissions.AllowAny])
+    def ai_chat(self, request):
+        """
+        POST /api/documents/chat/ (or /api/chat/)
+        Generates conversational response using local Ollama Mistral LLM with conversation history.
+        """
+        messages_history = request.data.get('messages', [])
+        if not messages_history and 'query' in request.data:
+            messages_history = [{"sender": "user", "text": request.data.get('query')}]
+
+        if not messages_history:
+            return Response(
+                {"status": "error", "error": "No messages history provided in request."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.chat_assistant_service import AIChatService
+        result = AIChatService.generate_chat_response(messages_history)
+        return Response(result, status=status.HTTP_200_OK)

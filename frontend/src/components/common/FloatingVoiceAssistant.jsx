@@ -145,49 +145,69 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
     return () => window.removeEventListener('open-voice-assistant', handleOpenAssistant);
   }, []);
 
-  // Web Speech API Voice Recognition (Multilingual)
-  const toggleVoiceListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Speech Recognition is not supported in this browser. Please use Chrome/Edge or type your question below.');
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  // Local Offline Whisper Voice Recognition via MediaRecorder API
+  const toggleVoiceListening = async () => {
+    if (isListening) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsListening(false);
       return;
     }
 
-    if (isListening) {
-      setIsListening(false);
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      alert('Audio recording is not supported in this browser. Please use Chrome or Edge.');
       return;
     }
 
     try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = lang;
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
-      recognition.onstart = () => {
-        setIsListening(true);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
-        setIsListening(false);
-        handleSend(transcript);
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size > 0) {
+          setIsTyping(true);
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'voice_query.webm');
+
+          try {
+            const res = await api.post('/api/voice/transcribe/', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            if (res.data?.status === 'success' && res.data?.text) {
+              setInput(res.data.text);
+            } else if (res.data?.status === 'no_speech') {
+              alert('No speech detected in recorded audio. Please try speaking into your mic again.');
+            }
+          } catch (err) {
+            console.error('Whisper transcription error:', err);
+          } finally {
+            setIsTyping(false);
+          }
+        }
       };
 
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognition.start();
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsListening(true);
     } catch (err) {
-      console.error('Speech error:', err);
+      console.error('Microphone error:', err);
       setIsListening(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('Microphone access denied. Please allow microphone permission in your browser.');
+      }
     }
   };
 
@@ -219,7 +239,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
     }
   };
 
-  const handleSend = (textToSend) => {
+  const handleSend = async (textToSend) => {
     const query = textToSend || input;
     if (!query.trim()) return;
 
@@ -230,74 +250,34 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     if (!textToSend) setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const q = query.toLowerCase();
-      let reply = '';
-
-      // Multilingual smart responses
-      if (lang === 'te-IN') {
-        if (q.includes('1-0-1') || q.includes('1 0 1')) {
-          reply = '1-0-1 అంటే: 1 డోస్ ఉదయం (Morning), 1 డోస్ రాత్రి (Night) వేసుకోవాలి. "0" అంటే మధ్యాహ్నం (Afternoon) వేసుకోకూడదు. ఇది రోజుకు 2 సార్లు వేసుకునే పద్ధతి.';
-        } else if (q.includes('1-1-1') || q.includes('1 1 1')) {
-          reply = '1-1-1 అంటే రోజుకు 3 సార్లు: ఉదయం, మధ్యాహ్నం మరియు రాత్రి భోజనం తర్వాత వేసుకోవాలి.';
-        } else if (q.includes('1-0-0')) {
-          reply = '1-0-0 అంటే రోజుకు ఒక్కసారి మాత్రమే ఉదయం పూట వేసుకోవాలి.';
-        } else if (q.includes('0-0-1')) {
-          reply = '0-0-1 అంటే రోజుకు ఒక్కసారి మాత్రమే రాత్రి పడుకునే ముందు వేసుకోవాలి.';
-        } else if (q.includes('paracetamol') || q.includes('calpol')) {
-          reply = 'పారాసిటమాల్ జ్వరం మరియు ఒంటి నొప్పుల కోసం ఉపయోగిస్తారు. దీనిని భోజనం తర్వాత మాత్రమే తీసుకోవాలి. రోజుకు 3-4 సార్లకు మించి వేసుకోకూడదు.';
-        } else if (q.includes('mundu') || q.includes('before food') || q.includes('khali')) {
-          reply = 'గ్యాస్ లేదా ఎసిడిటీ మందులు (పాంటోప్రాజోల్, ఒమెప్రాజోల్) ఉదయం అల్పాహారానికి 30 నిమిషాల ముందు ఖాళీ కడుపుతో తీసుకోవాలి.';
-        } else {
-          reply = 'మీ ఆరోగ్యం మరియు మందుల కోసం డాక్టర్ సూచించిన సమయాలను కచ్చితంగా పాటించండి. ఏవైనా సందేహాలుంటే మా వైద్యుడిని సంప్రదించండి.';
-        }
-      } else if (lang === 'mr-IN') {
-        if (q.includes('1-0-1') || q.includes('1 0 1')) {
-          reply = '1-0-1 चा अर्थ असा आहे: 1 डोस सकाळी (Morning) आणि 1 डोस रात्री (Night) घ्यावा. "0" म्हणजे दुपारी घेऊ नये. हे दिवसातून 2 वेळा घ्यायचे असते.';
-        } else if (q.includes('1-1-1') || q.includes('1 1 1')) {
-          reply = '1-1-1 चा अर्थ दिवसातून 3 वेळा: सकाळी, दुपारी आणि रात्री औषध घेणे.';
-        } else if (q.includes('paracetamol') || q.includes('calpol')) {
-          reply = 'पॅरासिटामॉल ताप आणि अंगदुखीसाठी असते. हे जेवणानंतर घ्यावे आणि दोन डोसमधील अंतर किमान ६ तास ठेवावे.';
-        } else {
-          reply = 'तुमच्या आरोग्यासाठी डॉक्टरांनी सांगितलेल्या वेळेवर औषधे घ्या. काही अडचण असल्यास डॉक्टरांचा सल्ला घ्या.';
-        }
-      } else if (lang === 'hi-IN') {
-        if (q.includes('1-0-1') || q.includes('1 0 1')) {
-          reply = '1-0-1 का मतलब है: "1" सुबह (Morning) और "1" रात (Night) को दवाई लेनी है, और "0" का मतलब दोपहर में नहीं लेनी है। यह दिन में 2 बार लेने के लिए होता है।';
-        } else if (q.includes('1-1-1') || q.includes('1 1 1')) {
-          reply = '1-1-1 का मतलब है दिन में 3 बार: 1 सुबह (Morning), 1 दोपहर (Afternoon) और 1 रात (Night) को दवाई लेना।';
-        } else if (q.includes('paracetamol') || q.includes('calpol')) {
-          reply = 'Paracetamol / Calpol बुखार और शरीर दर्द के लिए होती है। इसे खाना खाने के बाद लें और कम से कम 6 घंटे का अंतराल रखें।';
-        } else {
-          reply = 'अपनी दवाइयां हमेशा डॉक्टर के पर्चे पर लिखे निर्देशानुसार समय पर लें।';
-        }
-      } else {
-        // English
-        if (q.includes('1-0-1') || q.includes('1 0 1')) {
-          reply = '1-0-1 means: Take 1 dose in the Morning, 0 (None) in the Afternoon, and 1 dose at Night. It indicates a twice-daily dosage schedule.';
-        } else if (q.includes('1-1-1') || q.includes('1 1 1')) {
-          reply = '1-1-1 means: Take 3 times daily — Morning, Afternoon, and Night after meals.';
-        } else if (q.includes('paracetamol') || q.includes('calpol')) {
-          reply = 'Paracetamol/Calpol is for fever and mild pain. Take after food with at least a 6-hour gap between doses.';
-        } else {
-          reply = 'Please follow the exact dosage and timings prescribed by your doctor. Consult a healthcare professional for specific concerns.';
-        }
-      }
-
+    try {
+      const res = await api.post('/api/chat/', { messages: updatedMessages });
+      const reply = res.data?.response || 'Please consult your physician for exact medicine guidance.';
       const aiMsg = {
         id: Date.now() + 1,
         sender: 'ai',
         text: reply,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('Chat API Error:', err);
+      const fallbackReply = 'अपनी दवाइयां हमेशा डॉक्टर के पर्चे पर लिखे निर्देशानुसार समय पर लें।';
+      const aiMsg = {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: fallbackReply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } finally {
       setIsTyping(false);
-    }, 700);
+    }
   };
 
   return (

@@ -306,7 +306,15 @@ const UploadDocument = () => {
             setUploading(false);
             setIsExtendedProcessing(true);
           } else {
-            setProgress((prev) => Math.min(prev + 2, 95));
+            setProgress((prev) => {
+              const next = Math.min(prev + 4, 95);
+              if (next >= 85) {
+                setStageText('Stage 3: Verifying medicines against dictionary & generating audio...');
+              } else if (next >= 65) {
+                setStageText('Stage 2: Parsing dosage, timings & duration...');
+              }
+              return next;
+            });
           }
         } catch (pollErr) {
           console.error('Polling status error:', pollErr);

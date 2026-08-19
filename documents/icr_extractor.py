@@ -208,9 +208,17 @@ class PrescriptionICR:
                 import base64
                 import json
                 import requests
+                import io
+                from PIL import Image
 
-                with open(image_path, "rb") as img_file:
-                    base64_image = base64.b64encode(img_file.read()).decode("utf-8")
+                # Compress and optimize image to ensure ultra-fast upload & avoid large payload token limits
+                pil_img = Image.open(image_path)
+                if pil_img.mode in ('RGBA', 'P'):
+                    pil_img = pil_img.convert('RGB')
+                pil_img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                pil_img.save(buf, format='JPEG', quality=85)
+                base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
 
                 vision_prompt = (
                     "You are an expert medical prescription reader. Analyze this medical prescription carefully "
@@ -239,9 +247,10 @@ class PrescriptionICR:
                                 ]
                             }
                         ],
+                        "max_tokens": 1000,
                         "response_format": {"type": "json_object"}
                     },
-                    timeout=25
+                    timeout=60
                 )
 
                 if resp.status_code == 200:
@@ -261,6 +270,8 @@ class PrescriptionICR:
                         "processing_time_seconds": proc_time,
                         "status": "success"
                     }
+                else:
+                    print(f"[VISION LLM ERROR] API responded with status {resp.status_code}: {resp.text}")
             except Exception as v_err:
                 print(f"[VISION LLM FALLBACK] Falling back to local OCR due to: {v_err}")
 

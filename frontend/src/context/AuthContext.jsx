@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext(null);
@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       // Attempt backend JWT login
-      const response = await api.post('/api/token/', {
+      const response = await api.post('/api/auth/login/', {
         username: credentials.username,
         password: credentials.password,
       });
@@ -26,13 +26,26 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
 
-      // Fetch profile or set default user
-      const userInfo = {
+      // Fetch profile from backend
+      let userInfo = {
         username: credentials.username,
         name: credentials.username.charAt(0).toUpperCase() + credentials.username.slice(1),
         email: `${credentials.username}@sevahealth.org`,
         role: credentials.role || 'patient',
       };
+
+      try {
+        const profileRes = await api.get('/api/auth/profile/');
+        if (profileRes.data) {
+          userInfo = {
+            ...userInfo,
+            ...profileRes.data,
+            name: profileRes.data.full_name || profileRes.data.user || userInfo.name,
+          };
+        }
+      } catch (pErr) {
+        console.warn('Profile fetch error:', pErr);
+      }
 
       setUser(userInfo);
       setRole(credentials.role || 'patient');
@@ -41,37 +54,87 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return { success: true };
     } catch (err) {
-      console.warn('Backend server connection failed, entering demo mode:', err.message);
-      // Demo Fallback login
-      const userInfo = {
-        username: credentials.username || 'ramesh_kumar',
-        name: credentials.username ? credentials.username.replace('_', ' ').toUpperCase() : 'Ramesh Kumar',
-        email: `${credentials.username || 'ramesh'}@sevahealth.org`,
-        phone: '+91 98765 43210',
-        village: 'Sundarpur Village, Dist. Solan',
-        role: credentials.role || 'patient',
-      };
-      setUser(userInfo);
-      setRole(credentials.role || 'patient');
-      localStorage.setItem('user_info', JSON.stringify(userInfo));
-      localStorage.setItem('user_role', credentials.role || 'patient');
-      localStorage.setItem('access_token', 'demo_jwt_access_token');
+      console.error('Backend login failed:', err);
+
+      const isOfflineOrUnreachable =
+        !err.response ||
+        err.response?.status === 503 ||
+        err.response?.status === 500 ||
+        err.code === 'ERR_NETWORK' ||
+        err.message?.includes('Network Error');
+
+      // Fallback: If backend server is offline or returns 503 proxy error, seamlessly activate Demo Mode Login
+      if (isOfflineOrUnreachable) {
+        console.info('Backend server is offline. Activating Demo Mode Login...');
+        const demoUser = {
+          username: credentials.username || 'demo_user',
+          name: credentials.role === 'doctor' ? 'Dr. Ananya Sharma' : 'Ramesh Kumar',
+          email: `${credentials.username || 'user'}@sevahealth.org`,
+          role: credentials.role || 'patient',
+          phone: credentials.role === 'doctor' ? '+91 98111 22334' : '+91 98765 43210',
+        };
+        setUser(demoUser);
+        setRole(credentials.role || 'patient');
+        localStorage.setItem('user_info', JSON.stringify(demoUser));
+        localStorage.setItem('user_role', credentials.role || 'patient');
+        setLoading(false);
+        return { success: true, isDemo: true };
+      }
+
       setLoading(false);
-      return { success: true, isDemo: true };
+      return { success: false, error: err.response?.data?.detail || 'Invalid credentials' };
     }
   };
 
   const registerUser = async (userData) => {
     setLoading(true);
     try {
-      const response = await api.post('/accounts/register/', userData);
+      const payload = {
+        username: userData.username,
+        password: userData.password,
+        email: userData.email || '',
+        role: userData.role || 'patient',
+        phone_number: userData.phone || userData.phone_number || '',
+      };
+      const response = await api.post('/api/auth/register/', payload);
+      if (response.data?.access) {
+        localStorage.setItem('access_token', response.data.access);
+      }
+      if (response.data?.refresh) {
+        localStorage.setItem('refresh_token', response.data.refresh);
+      }
       setLoading(false);
       return { success: true, data: response.data };
     } catch (err) {
-      console.warn('Backend unavailable, simulating registration:', err.message);
+      console.error('Backend registration failed:', err);
+
+      const isOfflineOrUnreachable =
+        !err.response ||
+        err.response?.status === 503 ||
+        err.response?.status === 500 ||
+        err.code === 'ERR_NETWORK' ||
+        err.message?.includes('Network Error');
+
+      if (isOfflineOrUnreachable) {
+        console.info('Backend server is offline. Simulating Demo Registration...');
+        setLoading(false);
+        return { success: true, isDemo: true };
+      }
+
       setLoading(false);
-      return { success: true, isDemo: true };
+      return { success: false, error: err.response?.data ? JSON.stringify(err.response.data) : 'Registration failed' };
     }
+  };
+
+  const updateUser = (newUserData) => {
+    setUser((prev) => {
+      const updated = { ...prev, ...newUserData };
+      if (newUserData.first_name || newUserData.username) {
+        updated.name = newUserData.first_name || newUserData.username || prev?.name;
+      }
+      localStorage.setItem('user_info', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const logoutUser = () => {
@@ -91,6 +154,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         loginUser,
         registerUser,
+        updateUser,
         logoutUser,
         isAuthenticated: !!user,
       }}

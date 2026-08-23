@@ -1,180 +1,189 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Card from '../../components/common/Card';
-import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
 import { parseDosagePattern } from '../../utils/dosageFormatter';
 import {
-  FaFileUpload, FaCloudUploadAlt, FaRobot, FaTimes, FaTable, FaEye,
-  FaChevronDown, FaChevronUp, FaVolumeUp, FaPlay, FaPause, FaStop, FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaPills, FaSun, FaMoon, FaClock
+  FaFileUpload,
+  FaCloudUploadAlt,
+  FaRobot,
+  FaTimes,
+  FaInfoCircle,
+  FaVolumeUp,
+  FaPlay,
+  FaPause,
+  FaStop,
+  FaChevronDown,
+  FaChevronUp,
+  FaEye,
+  FaSun,
+  FaMoon,
+  FaPills,
+  FaTable,
+  FaHeadphones
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
   const [docName, setDocName] = useState('');
+  const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [stageText, setStageText] = useState('Uploading prescription...');
+  const [stageText, setStageText] = useState('');
   const [analyzed, setAnalyzed] = useState(null);
-  const [showRawDetails, setShowRawDetails] = useState(false);
-  const [showMedInfo, setShowMedInfo] = useState(true);
+  const [activeDocId, setActiveDocId] = useState(null);
+  const [inlineError, setInlineError] = useState(null);
+  const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
 
-  // Audio Speech Synthesis & Streaming State
+  // Preferred Language Sync: Telugu, English, Hindi, Marathi
+  const [preferredLang, setPreferredLang] = useState(() => {
+    const saved = localStorage.getItem('preferred_language');
+    if (saved) {
+      if (saved.startsWith('te')) return 'te';
+      if (saved.startsWith('hi')) return 'hi';
+      if (saved.startsWith('mr')) return 'mr';
+      return 'en';
+    }
+    return 'te';
+  });
+
+  const [audioLang, setAudioLang] = useState(() => {
+    const saved = localStorage.getItem('preferred_language');
+    return saved || 'te-IN';
+  });
+
+  // Audio Playback State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isPausedAudio, setIsPausedAudio] = useState(false);
-  const [audioLang, setAudioLang] = useState(() => {
-    return localStorage.getItem('preferred_language') || 'te-IN';
-  });
+  const [showRawDetails, setShowRawDetails] = useState(false);
+  const [syncingReminders, setSyncingReminders] = useState(false);
+  const [syncedCount, setSyncedCount] = useState(null);
   const audioPlayerRef = useRef(null);
 
-  const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
-  const [inlineError, setInlineError] = useState(null);
-  const [activeDocId, setActiveDocId] = useState(null);
-  const [verificationInputs, setVerificationInputs] = useState({});
-
-  const handleConfirmVerificationMedicine = (vIdx, item) => {
-    const enteredName = verificationInputs[vIdx] !== undefined ? verificationInputs[vIdx] : item.suggested_name;
-    if (!enteredName || !enteredName.trim()) return;
-
-    const newConfirmedMed = {
-      name: enteredName.trim().charAt(0).toUpperCase() + enteredName.trim().slice(1),
-      medicine: enteredName.trim(),
-      strength: item.strength || '',
-      frequency: item.frequency || '',
-      duration: item.duration || '',
-      confidence: 0.95,
-      confidence_label: 'High',
-      timing: item.timing || '',
-      dosage: item.strength || item.frequency || '',
-      info: item.suggested_name ? `${item.suggested_name} confirmed by user.` : 'Prescribed medicine confirmed by user.'
-    };
-
-    setAnalyzed((prev) => {
-      if (!prev) return prev;
-      const updatedMeds = [...(prev.medicines || []), newConfirmedMed];
-      const updatedNeedsVer = (prev.needs_verification || []).filter((_, idx) => idx !== vIdx);
-      return {
-        ...prev,
-        medicines: updatedMeds,
-        medicines_found: updatedMeds.length,
-        needs_verification: updatedNeedsVer
-      };
-    });
-
-    setVerificationInputs((prev) => {
-      const copy = { ...prev };
-      delete copy[vIdx];
-      return copy;
-    });
-  };
-
-  useEffect(() => {
-    const handleLangChange = (e) => {
-      if (e.detail?.lang) {
-        setAudioLang(e.detail.lang);
-      }
-    };
-    window.addEventListener('language-changed', handleLangChange);
-    return () => {
-      handleStopAudio();
-      window.removeEventListener('language-changed', handleLangChange);
-    };
-  }, []);
-
-  const checkDocStatusManually = async (docIdToPoll) => {
-    const id = docIdToPoll || activeDocId;
-    if (!id) return;
+  const handleSyncToReminders = async () => {
+    if (!analyzed?.medicines?.length) return;
+    setSyncingReminders(true);
     try {
-      const statusRes = await api.get(`/api/documents/${id}/extraction-status/`);
-      const statusData = statusRes.data;
-      if (statusData.status === 'complete') {
-        setUploading(false);
-        setIsExtendedProcessing(false);
-        setInlineError(null);
-        setAnalyzed({
-          document_id: statusData.document_id || id,
-          extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
-          medicines: statusData.medicines || [],
-          needs_verification: statusData.needs_verification || [],
-          medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
-          audio_script: statusData.audio_script || '',
-          audio_scripts: statusData.audio_scripts || null,
-          confidence: statusData.confidence || 0.88,
-          extraction_method: statusData.extraction_method || 'ollama_mistral_json',
-          quality_metrics: statusData.quality_metrics || {},
-          requires_review: statusData.requires_manual_review,
-        });
-      } else if (statusData.status === 'failed') {
-        setUploading(false);
-        setIsExtendedProcessing(false);
-        setInlineError(statusData.error_message || statusData.error || 'Extraction failed on local engine.');
-      }
-    } catch (e) {
-      console.error('Manual status check error:', e);
+      const res = await api.post('/api/reminders/schedules/sync-from-prescription/', {
+        document_id: activeDocId,
+        medicines: analyzed.medicines
+      });
+      setSyncedCount(res.data.imported_count || analyzed.medicines.length);
+    } catch (err) {
+      console.error('Sync to reminders error:', err);
+    } finally {
+      setSyncingReminders(false);
     }
   };
 
+  // Sync preferred language changes across components
+  useEffect(() => {
+    const handleLanguageChange = (e) => {
+      const newLang = e.detail?.lang || 'te-IN';
+      setAudioLang(newLang);
+      if (newLang.startsWith('te')) setPreferredLang('te');
+      else if (newLang.startsWith('hi')) setPreferredLang('hi');
+      else if (newLang.startsWith('mr')) setPreferredLang('mr');
+      else setPreferredLang('en');
+    };
+
+    window.addEventListener('language-changed', handleLanguageChange);
+    return () => window.removeEventListener('language-changed', handleLanguageChange);
+  }, []);
+
+  // Cleanup audio player on unmount
+  useEffect(() => {
+    return () => {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current = null;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Determine current audio script for the selected language
   const getAudioScriptForSelectedLang = () => {
     if (!analyzed) return '';
-    if (analyzed.audio_scripts) {
-      if (audioLang.startsWith('te')) return analyzed.audio_scripts.te || analyzed.audio_script;
-      if (audioLang.startsWith('hi')) return analyzed.audio_scripts.hi || analyzed.audio_script;
-      if (audioLang.startsWith('mr')) return analyzed.audio_scripts.mr || analyzed.audio_script;
-      return analyzed.audio_scripts.en || analyzed.audio_script;
+    const langKey = audioLang.startsWith('te') ? 'te' :
+                    audioLang.startsWith('hi') ? 'hi' :
+                    audioLang.startsWith('mr') ? 'mr' : 'en';
+
+    if (analyzed.audio_scripts && analyzed.audio_scripts[langKey]) {
+      return analyzed.audio_scripts[langKey];
     }
     return analyzed.audio_script || '';
   };
 
-  const speakAudioScript = async () => {
-    handleStopAudio();
-    const docId = activeDocId || (analyzed && analyzed.document_id);
+  // Play audio instructions via native backend MP3 streaming or browser speech fallback
+  const speakAudioScript = () => {
+    const textToSpeak = getAudioScriptForSelectedLang();
+    if (!textToSpeak) return;
 
-    // 1. Try High-Quality Native Backend Audio Streaming (Telugu, Hindi, Marathi, English)
-    if (docId) {
-      try {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    const langCode = audioLang.startsWith('te') ? 'te' :
+                     audioLang.startsWith('hi') ? 'hi' :
+                     audioLang.startsWith('mr') ? 'mr' : 'en';
+
+    // Primary High-Quality Voice Path: Native backend gTTS streaming
+    try {
+      let audioUrl = '';
+      if (activeDocId) {
+        audioUrl = `/api/documents/${activeDocId}/audio/?lang=${langCode}&t=${Date.now()}`;
+      } else {
+        audioUrl = `/api/documents/speak/?lang=${langCode}&text=${encodeURIComponent(textToSpeak)}`;
+      }
+
+      const audio = new Audio(audioUrl);
+      audioPlayerRef.current = audio;
+
+      audio.onplay = () => {
         setIsPlayingAudio(true);
         setIsPausedAudio(false);
-        const res = await api.get(`/api/documents/${docId}/audio/?lang=${audioLang}`, {
-          responseType: 'blob'
-        });
-        const blobUrl = URL.createObjectURL(res.data);
-        const audio = new Audio(blobUrl);
-        audioPlayerRef.current = audio;
+      };
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        setIsPausedAudio(false);
+        audioPlayerRef.current = null;
+      };
+      audio.onerror = () => {
+        console.warn('Backend audio streaming fallback to browser speech synthesis');
+        fallbackBrowserSpeech(textToSpeak, audioLang);
+      };
 
-        audio.onended = () => {
-          setIsPlayingAudio(false);
-          setIsPausedAudio(false);
-        };
-        audio.onerror = () => {
-          fallbackSpeechSynthesis();
-        };
-
-        await audio.play();
-        return;
-      } catch (err) {
-        console.warn('Backend audio streaming failed, using fallback:', err);
-      }
+      audio.play().catch(() => {
+        fallbackBrowserSpeech(textToSpeak, audioLang);
+      });
+      return;
+    } catch (streamErr) {
+      console.warn('Audio streaming initialization error:', streamErr);
+      fallbackBrowserSpeech(textToSpeak, audioLang);
     }
-
-    // 2. Fallback to Web Speech Synthesis
-    fallbackSpeechSynthesis();
   };
 
-  const fallbackSpeechSynthesis = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('Text-to-speech is not supported in your browser.');
-      setIsPlayingAudio(false);
-      setIsPausedAudio(false);
-      return;
-    }
+  // Fallback to browser Web Speech API if offline
+  const fallbackBrowserSpeech = (textToSpeak, langCode) => {
+    if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const script = getAudioScriptForSelectedLang();
-    if (!script) return;
 
-    const utterance = new SpeechSynthesisUtterance(script);
-    utterance.lang = audioLang;
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = langCode;
+    utterance.rate = 0.90;
+
+    const voices = window.speechSynthesis.getVoices();
+    const matchedVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
+    if (matchedVoice) utterance.voice = matchedVoice;
 
     utterance.onstart = () => {
       setIsPlayingAudio(true);
@@ -193,24 +202,22 @@ const UploadDocument = () => {
   };
 
   const handlePauseAudio = () => {
-    if (audioPlayerRef.current && !audioPlayerRef.current.paused) {
+    if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
       setIsPausedAudio(true);
-    } else if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    } else if ('speechSynthesis' in window) {
       window.speechSynthesis.pause();
       setIsPausedAudio(true);
     }
   };
 
   const handleResumeAudio = () => {
-    if (audioPlayerRef.current && audioPlayerRef.current.paused) {
+    if (audioPlayerRef.current && isPausedAudio) {
       audioPlayerRef.current.play();
       setIsPausedAudio(false);
-    } else if (window.speechSynthesis && window.speechSynthesis.paused) {
+    } else if ('speechSynthesis' in window && isPausedAudio) {
       window.speechSynthesis.resume();
       setIsPausedAudio(false);
-    } else {
-      speakAudioScript();
     }
   };
 
@@ -244,7 +251,7 @@ const UploadDocument = () => {
     if (!file) return;
 
     setUploading(true);
-    setProgress(20);
+    setProgress(25);
     setStageText('Stage 1: Uploading prescription image...');
     setInlineError(null);
     setIsExtendedProcessing(false);
@@ -259,16 +266,16 @@ const UploadDocument = () => {
       });
       const docId = response.data.id;
       setActiveDocId(docId);
-      setProgress(40);
-      setStageText('Stage 2: GLM-OCR Vision reading prescription image...');
+      setProgress(50);
+      setStageText('Stage 2: Vision OCR reading prescription strokes...');
 
       await api.post(`/api/documents/${docId}/extract-text/`);
-      setProgress(60);
-      setStageText('Stage 3: Mistral 7B extracting structured medicine records...');
+      setProgress(70);
+      setStageText('Stage 3: Extracting medicines, dosages & usage...');
 
-      // Poll up to 240 seconds (120 attempts @ 2s interval) for deep handwritten prescription vision+LLM extraction
+      // Fast polling (1s interval) for deep prescription OCR extraction
       let pollCount = 0;
-      const maxPollAttempts = 120;
+      const maxPollAttempts = 60;
 
       const pollInterval = setInterval(async () => {
         pollCount += 1;
@@ -279,7 +286,7 @@ const UploadDocument = () => {
           if (statusData.status === 'complete') {
             clearInterval(pollInterval);
             setProgress(100);
-            setStageText('Stage 4: Extraction complete');
+            setStageText('Stage 4: Extraction complete!');
             setUploading(false);
             setIsExtendedProcessing(false);
 
@@ -290,8 +297,8 @@ const UploadDocument = () => {
               medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
               audio_script: statusData.audio_script || '',
               audio_scripts: statusData.audio_scripts || null,
-              confidence: statusData.confidence || 0.88,
-              extraction_method: statusData.extraction_method || 'ollama_mistral_json',
+              confidence: statusData.confidence || 0.95,
+              extraction_method: statusData.extraction_method || 'Vision OCR',
               quality_metrics: statusData.quality_metrics || {},
               requires_review: statusData.requires_manual_review,
               db_doc: response ? response.data : null,
@@ -300,18 +307,18 @@ const UploadDocument = () => {
             clearInterval(pollInterval);
             setUploading(false);
             setIsExtendedProcessing(false);
-            setInlineError(statusData.error_message || statusData.error || 'Local Ollama vision/LLM extraction failed.');
+            setInlineError(statusData.error_message || statusData.error || 'Prescription extraction encountered an issue.');
           } else if (pollCount >= maxPollAttempts) {
             clearInterval(pollInterval);
             setUploading(false);
             setIsExtendedProcessing(true);
           } else {
             setProgress((prev) => {
-              const next = Math.min(prev + 4, 95);
+              const next = Math.min(prev + 5, 96);
               if (next >= 85) {
                 setStageText('Stage 3: Verifying medicines against dictionary & generating audio...');
               } else if (next >= 65) {
-                setStageText('Stage 2: Parsing dosage, timings & duration...');
+                setStageText('Stage 2: Parsing dosage timings (1-0-1) & medical usage...');
               }
               return next;
             });
@@ -324,100 +331,149 @@ const UploadDocument = () => {
             setIsExtendedProcessing(true);
           }
         }
-      }, 2000);
+      }, 1000);
 
     } catch (err) {
       console.error('Upload error:', err);
       setUploading(false);
-      if (err.response?.status === 401) {
-        setInlineError('Session expired. Please log in again.');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-      } else {
-        setInlineError('Upload error: ' + (err.response?.data?.detail || err.response?.data?.error || err.message));
+      setInlineError(err.response?.data?.detail || 'Failed to upload and start prescription extraction.');
+    }
+  };
+
+  const checkDocStatusManually = async () => {
+    if (!activeDocId) return;
+    try {
+      const statusRes = await api.get(`/api/documents/${activeDocId}/extraction-status/`);
+      const statusData = statusRes.data;
+      if (statusData.status === 'complete') {
+        setProgress(100);
+        setUploading(false);
+        setIsExtendedProcessing(false);
+        setAnalyzed({
+          extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
+          medicines: statusData.medicines || [],
+          needs_verification: statusData.needs_verification || [],
+          medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
+          audio_script: statusData.audio_script || '',
+          audio_scripts: statusData.audio_scripts || null,
+          confidence: statusData.confidence || 0.95,
+          extraction_method: statusData.extraction_method || 'Vision OCR',
+          quality_metrics: statusData.quality_metrics || {},
+          requires_review: statusData.requires_manual_review,
+        });
       }
+    } catch (e) {
+      console.error('Manual check failed:', e);
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      <div className="flex items-center space-x-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-        <div className="w-14 h-14 rounded-2xl bg-mint-500 text-white flex items-center justify-center text-2xl shadow-md">
-          <FaFileUpload />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Upload Medical Document</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs">Upload prescription images for 100% local offline AI medicine extraction (GLM-OCR + Mistral 7B)</p>
+    <div className="space-y-6 pb-12">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-[#00A896]/15 via-tealSoft-500/10 to-health-500/15 border border-mint-200 dark:border-slate-800 p-6 rounded-3xl shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center space-x-3">
+              <span className="p-2.5 rounded-2xl bg-tealSoft-500 text-white shadow-md">
+                <FaFileUpload />
+              </span>
+              <span>Upload Medical Prescription</span>
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              Extract medicine names, 3-slot dosage schedules (<span className="font-bold text-mint-700 dark:text-mint-400">1 = Take, 0 = Skip</span>), medical purpose, and listen to spoken audio in your preferred language.
+            </p>
+          </div>
+
+          {/* Quick Language Switcher */}
+          <div className="flex items-center space-x-2 bg-white dark:bg-[#1E293B] p-2 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 pl-2">Preferred Voice:</span>
+            <select
+              value={audioLang}
+              onChange={(e) => {
+                const newLang = e.target.value;
+                setAudioLang(newLang);
+                localStorage.setItem('preferred_language', newLang);
+                window.dispatchEvent(new CustomEvent('language-changed', { detail: { lang: newLang } }));
+              }}
+              className="text-xs font-bold bg-mint-50 dark:bg-slate-800 text-mint-800 dark:text-mint-300 rounded-xl px-3 py-1.5 border border-mint-200 dark:border-slate-600 outline-none cursor-pointer"
+            >
+              <option value="te-IN">తెలుగు (Telugu)</option>
+              <option value="en-US">English (Voice)</option>
+              <option value="hi-IN">हिंदी (Hindi)</option>
+              <option value="mr-IN">मराठी (Marathi)</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {!localStorage.getItem('access_token') && (
-        <Alert
-          type="warning"
-          message="⚠️ You are currently browsing as a guest. Please Log In or Register Free to run AI medicine extraction."
-        />
-      )}
+      {/* Main Grid: 2-Column Responsive Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
-      {/* Equal 50/50 Grid Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* LEFT COLUMN: 1. Prescription Upload Form + 2. Voice Guidance Player (Below Upload) */}
+        <div className="space-y-6">
 
-        {/* LEFT SIDE (50% Width Container - Upload & Preview) */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card className="h-[640px] flex flex-col justify-between space-y-4 overflow-hidden shadow-md">
-            <form onSubmit={handleUpload} className="h-full flex flex-col justify-between space-y-3">
+          {/* 1. Prescription Image Upload Card */}
+          <Card className="shadow-md border border-slate-200/80 dark:border-slate-700/80">
+            <div className="flex items-center space-x-2 pb-3 border-b border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold text-base">
+              <FaFileUpload className="text-tealSoft-500 text-lg" />
+              <span>Select & Upload Prescription</span>
+            </div>
 
-              <div className="space-y-3">
-                <Input
-                  label="Document Name"
-                  placeholder="e.g. Dr_Sharma_Prescription_Aug"
-                  value={docName}
-                  onChange={(e) => setDocName(e.target.value)}
-                  required
-                />
+            <form onSubmit={handleUpload} className="pt-4 space-y-4">
+              <Input
+                label="Document Name"
+                placeholder="e.g. Dr_Sharma_Prescription_Aug"
+                value={docName}
+                onChange={(e) => setDocName(e.target.value)}
+                required
+              />
 
-                {!preview ? (
-                  <label className="border-2 border-dashed border-health-200 dark:border-slate-700 hover:border-health-400 dark:hover:border-health-500 bg-health-50/30 dark:bg-[#1E293B]/40 hover:bg-health-50 dark:hover:bg-[#1E293B]/80 rounded-2xl h-[340px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-6">
-                    <div className="w-16 h-16 rounded-2xl bg-health-100 dark:bg-slate-700 text-health-600 dark:text-health-400 flex items-center justify-center text-3xl">
-                      <FaCloudUploadAlt />
-                    </div>
-                    <div className="text-center space-y-1">
-                      <p className="text-base font-semibold text-slate-700 dark:text-slate-200">Click to select prescription image</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-400">Supports JPG, PNG, WEBP prescription photos</p>
-                    </div>
-                    <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  </label>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 font-semibold px-1">
-                      <span>Prescription Image View</span>
-                      <button
-                        type="button"
-                        onClick={() => { setFile(null); setPreview(null); setAnalyzed(null); if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }}
-                        className="text-rose-500 hover:underline flex items-center space-x-1"
-                      >
-                        <FaTimes /> <span>Remove File</span>
-                      </button>
-                    </div>
-                    <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[340px] flex items-center justify-center p-3 overflow-hidden group">
-                      <img
-                        src={preview}
-                        alt="Prescription Preview"
-                        className="max-h-[320px] max-w-full object-contain rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <a
-                        href={preview}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-[#1E293B] hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl shadow-md backdrop-blur transition-all"
-                        title="View Full Resolution"
-                      >
-                        <FaEye />
-                      </a>
-                    </div>
+              {!preview ? (
+                <label className="border-2 border-dashed border-health-200 dark:border-slate-700 hover:border-health-400 dark:hover:border-health-500 bg-health-50/30 dark:bg-[#1E293B]/40 hover:bg-health-50 dark:hover:bg-[#1E293B]/80 rounded-2xl h-[280px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-6">
+                  <div className="w-16 h-16 rounded-2xl bg-health-100 dark:bg-slate-700 text-health-600 dark:text-health-400 flex items-center justify-center text-3xl shadow-sm">
+                    <FaCloudUploadAlt />
                   </div>
-                )}
-              </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-base font-semibold text-slate-700 dark:text-slate-200">Click to select prescription image</p>
+                    <p className="text-xs text-slate-400">Supports JPG, PNG, WEBP prescription photos</p>
+                  </div>
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                </label>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 font-semibold px-1">
+                    <span>Prescription Image View</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        setPreview(null);
+                        setAnalyzed(null);
+                        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                      }}
+                      className="text-rose-500 hover:underline flex items-center space-x-1"
+                    >
+                      <FaTimes /> <span>Remove File</span>
+                    </button>
+                  </div>
+                  <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[280px] flex items-center justify-center p-3 overflow-hidden group">
+                    <img
+                      src={preview}
+                      alt="Prescription Preview"
+                      className="max-h-[260px] max-w-full object-contain rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <a
+                      href={preview}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-[#1E293B] hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl shadow-md backdrop-blur transition-all"
+                      title="View Full Resolution"
+                    >
+                      <FaEye />
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {inlineError && (
                 <Alert type="error" message={inlineError} className="text-xs" />
@@ -427,7 +483,7 @@ const UploadDocument = () => {
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
                   <div className="flex items-center space-x-2 font-bold">
                     <FaInfoCircle className="text-amber-600 text-sm flex-shrink-0" />
-                    <span>Still processing, this can take a bit longer for handwritten prescriptions.</span>
+                    <span>Still processing handwriting OCR...</span>
                   </div>
                   <button
                     type="button"
@@ -440,10 +496,10 @@ const UploadDocument = () => {
               )}
 
               {uploading && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 pt-1">
                   <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <span>{stageText || 'Extracting medicines with GLM-OCR + Mistral...'}</span>
-                    <span>{progress}%</span>
+                    <span>{stageText || 'Extracting medicines...'}</span>
+                    <span className="font-bold text-mint-600">{progress}%</span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-health-500 to-mint-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
@@ -459,54 +515,204 @@ const UploadDocument = () => {
                 disabled={!file || uploading}
                 icon={FaFileUpload}
               >
-                {uploading ? 'Processing...' : 'Upload & Extract Medicines'}
+                {uploading ? 'Extracting Medicines...' : 'Upload & Extract Medicines'}
               </Button>
-
             </form>
           </Card>
+
+          {/* 2. DEDICATED VOICE GUIDANCE & AUDIO PLAYER CARD (Placed CLEANLY below Image Upload) */}
+          {analyzed && (analyzed.audio_script || analyzed.audio_scripts) && (
+            <Card className="shadow-md border border-mint-200/80 dark:border-slate-700/80 bg-gradient-to-br from-mint-50/40 via-white to-tealSoft-50/20 dark:from-[#172033] dark:to-[#1E293B] space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-mint-100 dark:border-slate-700">
+                <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-bold text-base">
+                  <div className="w-8 h-8 rounded-xl bg-mint-500 text-white flex items-center justify-center text-sm shadow-sm">
+                    <FaHeadphones />
+                  </div>
+                  <span>Voice Guidance & Audio Player</span>
+                </div>
+
+                {/* Language Selector */}
+                <select
+                  value={audioLang}
+                  onChange={(e) => {
+                    const newLang = e.target.value;
+                    setAudioLang(newLang);
+                    localStorage.setItem('preferred_language', newLang);
+                    window.dispatchEvent(new CustomEvent('language-changed', { detail: { lang: newLang } }));
+                  }}
+                  className="text-xs bg-white dark:bg-[#0B1220] border border-mint-300 dark:border-slate-600 rounded-xl px-3 py-1.5 font-bold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs outline-none"
+                >
+                  <option value="te-IN">Telugu (తెలుగు)</option>
+                  <option value="en-US">English (Voice)</option>
+                  <option value="hi-IN">Hindi (हिंदी)</option>
+                  <option value="mr-IN">Marathi (मराठी)</option>
+                </select>
+              </div>
+
+              {/* Audio Playback Controls */}
+              <div className="flex items-center justify-between bg-white dark:bg-[#0B1220] p-3 rounded-2xl border border-mint-100 dark:border-slate-700 shadow-xs">
+                <div className="flex items-center space-x-2.5">
+                  {!isPlayingAudio ? (
+                    <button
+                      type="button"
+                      onClick={speakAudioScript}
+                      className="px-4 py-2 bg-mint-600 hover:bg-mint-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-sm transition-all"
+                    >
+                      <FaPlay className="text-[10px]" />
+                      <span>Listen Audio Instructions</span>
+                    </button>
+                  ) : isPausedAudio ? (
+                    <button
+                      type="button"
+                      onClick={handleResumeAudio}
+                      className="px-4 py-2 bg-mint-600 hover:bg-mint-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-sm transition-all"
+                    >
+                      <FaPlay className="text-[10px]" />
+                      <span>Resume Audio</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handlePauseAudio}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-sm transition-all"
+                    >
+                      <FaPause className="text-[10px]" />
+                      <span>Pause</span>
+                    </button>
+                  )}
+
+                  {isPlayingAudio && (
+                    <button
+                      type="button"
+                      onClick={handleStopAudio}
+                      className="px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all"
+                    >
+                      <FaStop className="text-[10px]" />
+                      <span>Stop</span>
+                    </button>
+                  )}
+                </div>
+
+                <span className="text-[11px] font-bold text-mint-700 dark:text-mint-400 bg-mint-100/80 dark:bg-slate-800 px-3 py-1 rounded-full flex items-center space-x-1.5">
+                  <span className={`w-2 h-2 rounded-full ${isPlayingAudio ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                  <span>{isPlayingAudio ? 'Playing' : 'Ready to Play'}</span>
+                </span>
+              </div>
+
+              {/* Multilingual Translation Text Preview with Clean Typography */}
+              {getAudioScriptForSelectedLang() && (
+                <div className="p-3.5 bg-white dark:bg-[#0B1220] rounded-2xl border border-mint-200/80 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 leading-relaxed shadow-xs space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-mint-800 dark:text-mint-400 pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <span className="flex items-center space-x-1.5">
+                      <FaVolumeUp className="text-mint-600" />
+                      <span>
+                        {audioLang.startsWith('te') ? '🔊 తెలుగు అనువాదం (Telugu Transcript)' :
+                         audioLang.startsWith('hi') ? '🔊 हिंदी अनुवाद (Hindi Transcript)' :
+                         audioLang.startsWith('mr') ? '🔊 मराठी भाषांतर (Marathi Transcript)' :
+                         '🔊 English Voice Guidance Transcript'}
+                      </span>
+                    </span>
+                  </div>
+                  <p className="font-medium text-xs text-slate-800 dark:text-slate-200 leading-relaxed max-h-36 overflow-y-auto pr-1 whitespace-pre-wrap">
+                    {getAudioScriptForSelectedLang()}
+                  </p>
+                </div>
+              )}
+
+              {/* Quick Action: Ask AI Voice Assistant Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-voice-assistant', {
+                    detail: { prescriptionContext: analyzed.medicines }
+                  }));
+                }}
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-mint-500 to-tealSoft-500 hover:from-mint-600 hover:to-tealSoft-600 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 shadow-sm transition-all"
+              >
+                <FaRobot className="text-sm" />
+                <span>💬 Ask Voice Sahayak About These Dosages & Timings</span>
+              </button>
+            </Card>
+          )}
+
         </div>
 
-        {/* RIGHT SIDE (50% Width Container - AI Medicine Extraction Results) */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card className={`h-[640px] flex flex-col justify-between shadow-md ${analyzed ? 'border-mint-200 dark:border-slate-700/80 bg-mint-50/10 dark:bg-[#172033]' : 'bg-slate-50 dark:bg-[#172033] border-slate-100 dark:border-slate-700/80'}`}>
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-700/80 shrink-0">
+        {/* RIGHT COLUMN: PURE & SPACIOUS AI MEDICINE EXTRACTION RESULTS */}
+        <div className="space-y-6">
+          <Card className={`min-h-[580px] flex flex-col shadow-md ${analyzed ? 'border-mint-200 dark:border-slate-700/80 bg-white dark:bg-[#172033]' : 'bg-slate-50 dark:bg-[#172033] border-slate-100 dark:border-slate-700/80'}`}>
+            <div className="flex justify-between items-center pb-3.5 border-b border-slate-100 dark:border-slate-700 shrink-0">
               <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-bold text-base">
                 <FaRobot className="text-tealSoft-500 text-xl" />
-                <span>AI Medicine Extraction</span>
+                <span>AI Medicine Extraction Results</span>
               </div>
               {analyzed && (
-                <span className="text-xs font-bold text-mint-700 dark:text-mint-300 bg-mint-100 dark:bg-slate-800 px-3 py-1 rounded-full flex items-center space-x-1.5 shadow-sm">
-                  <FaPills /> <span>{(analyzed.medicines ? analyzed.medicines.length : 0) + (analyzed.medicines_only ? analyzed.medicines_only.length : 0)} Medicines Found</span>
+                <span className="text-xs font-bold text-mint-700 dark:text-mint-300 bg-mint-100 dark:bg-slate-800 px-3.5 py-1 rounded-full flex items-center space-x-1.5 shadow-sm">
+                  <FaPills />
+                  <span>{(analyzed.medicines ? analyzed.medicines.length : 0) + (analyzed.medicines_only ? analyzed.medicines_only.length : 0)} Medicines Identified</span>
                 </span>
               )}
             </div>
 
             {!analyzed ? (
-              <div className="my-auto py-20 text-center text-slate-400 dark:text-slate-400 space-y-4">
+              <div className="my-auto py-24 text-center text-slate-400 dark:text-slate-400 space-y-4">
                 <FaTable className="text-5xl mx-auto opacity-40 text-tealSoft-400" />
                 <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Upload prescription image on left panel</p>
-                <p className="text-xs text-slate-400 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">Extracted medicine names, dosages, and humanized daily schedules will appear here instantly with full audio instructions.</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">Extracted medicine names, 3-slot daily schedules, tablet medical usage, and instructions will appear here clearly without clutter.</p>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col justify-between pt-3 space-y-3.5 overflow-hidden">
+              <div className="flex-1 flex flex-col pt-3.5 space-y-4">
 
-                {/* 1. Confidence & Model Badge */}
-                <div className="shrink-0">
+                {/* Confidence & Model Alert */}
+                <div className="shrink-0 space-y-2.5">
                   {analyzed.confidence >= 0.75 ? (
-                    <Alert type="success" message={`✓ High Confidence Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — Method: ${analyzed.extraction_method || 'Vision LLM'}.`} />
+                    <Alert type="success" message={`✓ High Confidence Extraction (${(analyzed.confidence * 100).toFixed(0)}%) — Method: ${analyzed.extraction_method || 'Vision OCR'}.`} />
                   ) : (
                     <Alert type="warning" message={`⚠️ Candidate Items (${(analyzed.confidence * 100).toFixed(0)}%) — Please verify handwritten entries with doctor.`} />
                   )}
+
+                  {/* 1-Click Sync to Medication Reminders Schedule */}
+                  {analyzed.medicines && analyzed.medicines.length > 0 && (
+                    <div className="p-3 bg-gradient-to-r from-tealSoft-50 to-mint-50 dark:from-[#1E293B] dark:to-[#172033] border border-tealSoft-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="p-2 rounded-xl bg-tealSoft-500 text-white text-sm shadow-xs">
+                          <FaClock />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Add to Medication Schedule</h4>
+                          <p className="text-[11px] text-slate-500">Auto-create Morning, Afternoon & Night reminder alarms</p>
+                        </div>
+                      </div>
+
+                      {syncedCount === null ? (
+                        <button
+                          type="button"
+                          onClick={handleSyncToReminders}
+                          disabled={syncingReminders}
+                          className="px-4 py-2 bg-tealSoft-600 hover:bg-tealSoft-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all whitespace-nowrap"
+                        >
+                          {syncingReminders ? 'Adding...' : '⏰ Set Daily Reminders'}
+                        </button>
+                      ) : (
+                        <a
+                          href="/patient/reminders"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
+                        >
+                          <FaCheckCircle className="text-xs" />
+                          <span>Added {syncedCount} Meds (View Reminders)</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* 2. TOP PRIORITY: DETECTED MEDICINES CARDS PANEL (Moved to TOP with 16-20px card spacing & generous padding) */}
-                <div className="flex-1 overflow-y-auto pr-1.5 space-y-4 min-h-[220px]">
-                  <div className="flex items-center justify-between sticky top-0 bg-[#f8fafc]/90 dark:bg-[#172033]/90 backdrop-blur py-1 z-10">
+                {/* DETECTED MEDICINES CARDS PANEL */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
                     <h4 className="text-xs font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center space-x-1.5">
                       <FaPills className="text-tealSoft-500 text-sm" />
                       <span>DETECTED MEDICINES ({analyzed.medicines?.length || 0})</span>
                     </h4>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-400 font-medium">Clear Visual Dosage Schedule</span>
+                    <span className="text-[11px] text-slate-400 font-medium">Clear Visual Dosage Schedule</span>
                   </div>
 
                   {analyzed.medicines && analyzed.medicines.length > 0 ? (
@@ -521,12 +727,14 @@ const UploadDocument = () => {
                       return (
                         <div
                           key={idx}
-                          className="p-4.5 sm:p-5 bg-white dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-r-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/60 space-y-3 transition-all hover:shadow-md hover:border-[#1abc9c]"
+                          className="p-5 bg-white dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/60 space-y-3.5 transition-all hover:shadow-md hover:border-[#1abc9c]"
                         >
                           {/* Medicine Header: Name & Match Score */}
                           <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-100 text-base">
-                            <span className="text-slate-900 dark:text-slate-100 font-extrabold tracking-tight">{med.medicine || med.name || med.raw_text || med.raw_line}</span>
-                            <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-mint-100 dark:bg-slate-700 text-mint-800 dark:text-mint-300 font-bold shadow-xs">
+                            <span className="text-slate-900 dark:text-slate-100 font-extrabold tracking-tight text-lg">
+                              {med.medicine || med.name || med.raw_text || med.raw_line}
+                            </span>
+                            <span className="text-xs font-mono px-3 py-1 rounded-full bg-mint-100 dark:bg-slate-700 text-mint-800 dark:text-mint-300 font-bold shadow-xs">
                               {(med.confidence ? (med.confidence * 100).toFixed(0) : 95)}% match
                             </span>
                           </div>
@@ -535,10 +743,10 @@ const UploadDocument = () => {
                           {dosageInfo.hasSlotInfo && (
                             <div className="grid grid-cols-3 gap-2.5 pt-1">
                               {/* Morning Slot */}
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
+                              <div className={`p-2.5 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
                                 dosageInfo.morning.take
                                   ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60'
                               }`}>
                                 <span className="text-[10px] font-bold flex items-center space-x-1">
                                   <FaSun className="text-amber-500" /> <span>Morning</span>
@@ -549,10 +757,10 @@ const UploadDocument = () => {
                               </div>
 
                               {/* Afternoon Slot */}
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
+                              <div className={`p-2.5 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
                                 dosageInfo.afternoon.take
                                   ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60'
                               }`}>
                                 <span className="text-[10px] font-bold flex items-center space-x-1">
                                   <FaSun className="text-orange-500" /> <span>Afternoon</span>
@@ -563,10 +771,10 @@ const UploadDocument = () => {
                               </div>
 
                               {/* Night Slot */}
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
+                              <div className={`p-2.5 rounded-xl text-center border text-xs font-semibold flex flex-col items-center justify-center transition-all ${
                                 dosageInfo.night.take
                                   ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 shadow-sm'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 opacity-60'
+                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-400 opacity-60'
                               }`}>
                                 <span className="text-[10px] font-bold flex items-center space-x-1">
                                   <FaMoon className="text-indigo-400" /> <span>Night</span>
@@ -578,33 +786,45 @@ const UploadDocument = () => {
                             </div>
                           )}
 
+                          {/* Dedicated Tablet Usage & Purpose Section */}
+                          {(med.usage || med.usage_te || med.usage_hi || med.usage_mr || med.info) && (
+                            <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/80 dark:border-blue-800/60 rounded-xl text-xs space-y-1.5 shadow-sm">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="font-bold text-blue-900 dark:text-blue-300 flex items-center space-x-1.5">
+                                  <span className="text-sm">🎯</span>
+                                  <span>
+                                    {preferredLang === 'te' ? 'టాబ్లెట్ ఉపయోగం (Usage / Purpose):' :
+                                     preferredLang === 'hi' ? 'दवा का उपयोग (Usage / Purpose):' :
+                                     preferredLang === 'mr' ? 'औषधाचा वापर (Usage / Purpose):' :
+                                     'Tablet Usage / Purpose:'}
+                                  </span>
+                                </span>
+                                {med.category && (
+                                  <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 bg-blue-100/80 dark:bg-blue-900/80 text-blue-800 dark:text-blue-200 rounded-full border border-blue-200 dark:border-blue-700">
+                                    {preferredLang === 'te' ? (med.category_te || med.category) :
+                                     preferredLang === 'hi' ? (med.category_hi || med.category) :
+                                     preferredLang === 'mr' ? (med.category_mr || med.category) :
+                                     med.category}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="font-medium text-slate-800 dark:text-slate-200 leading-relaxed pl-5 text-xs">
+                                {preferredLang === 'te' ? (med.usage_te || med.usage || med.info) :
+                                 preferredLang === 'hi' ? (med.usage_hi || med.usage || med.info) :
+                                 preferredLang === 'mr' ? (med.usage_mr || med.usage || med.info) :
+                                 (med.usage || med.info || "Prescribed therapeutic medication as instructed by physician.")}
+                              </p>
+                            </div>
+                          )}
+
                           {/* Plain-English Instructions Banner */}
                           <div className="text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-start space-x-2">
                             <span className="font-bold text-mint-700 dark:text-mint-400 shrink-0">📋 Instructions:</span>
                             <span className="font-medium leading-relaxed">{dosageInfo.humanSummary}</span>
                           </div>
-
-                          {showMedInfo && med.info && (
-                            <div className="text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-2 bg-mint-50/50 dark:bg-slate-900/40 p-2 rounded-lg border border-mint-100 dark:border-slate-800/60">
-                              <FaInfoCircle className="text-teal-500 text-xs mt-0.5 flex-shrink-0" />
-                              <span className="leading-relaxed">{med.info}</span>
-                            </div>
-                          )}
                         </div>
                       );
                     })
-                  ) : analyzed.medicines_only && analyzed.medicines_only.length > 0 ? (
-                    analyzed.medicines_only.map((medStr, idx) => (
-                      <div
-                        key={idx}
-                        className="p-4 bg-white dark:bg-[#1E293B] border-l-4 border-[#1abc9c] rounded-r-xl shadow-sm border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-semibold text-sm flex items-center justify-between transition-all hover:shadow-md"
-                      >
-                        <span className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{medStr}</span>
-                        <span className="text-xs uppercase font-bold text-mint-800 dark:text-mint-300 bg-mint-100 dark:bg-slate-700 px-2.5 py-1 rounded-full ml-2 flex-shrink-0">
-                          Rx
-                        </span>
-                      </div>
-                    ))
                   ) : (
                     <div className="p-4 bg-amber-50/80 dark:bg-[#1E293B] rounded-2xl border border-amber-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 space-y-3 text-xs">
                       <div className="flex items-center space-x-2 font-bold text-amber-900 dark:text-amber-300 text-sm">
@@ -617,116 +837,19 @@ const UploadDocument = () => {
                   )}
                 </div>
 
-                {/* 3. VOICE GUIDANCE PLAYER & MULTILINGUAL TRANSLATION (Moved BELOW detected medicines) */}
-                {(analyzed.audio_script || analyzed.audio_scripts) && (
-                  <div className="p-3 bg-mint-50/90 dark:bg-[#1E293B] border border-mint-200 dark:border-slate-700/80 rounded-2xl space-y-2.5 shrink-0 shadow-xs">
-                    <div className="flex items-center justify-between text-xs font-bold text-mint-900 dark:text-mint-200">
-                      <span className="flex items-center space-x-1.5">
-                        <FaVolumeUp className="text-mint-600 dark:text-mint-400 text-sm" />
-                        <span>Voice Guidance Player</span>
-                      </span>
-                      <select
-                        value={audioLang}
-                        onChange={(e) => {
-                          const newLang = e.target.value;
-                          setAudioLang(newLang);
-                          localStorage.setItem('preferred_language', newLang);
-                          window.dispatchEvent(new CustomEvent('language-changed', { detail: { lang: newLang } }));
-                        }}
-                        className="text-[11px] bg-white dark:bg-[#0B1220] border border-mint-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-2xs"
-                      >
-                        <option value="te-IN">Telugu (తెలుగు)</option>
-                        <option value="en-US">English (Voice)</option>
-                        <option value="hi-IN">Hindi (हिंदी)</option>
-                        <option value="mr-IN">Marathi (मराठी)</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {!isPlayingAudio ? (
-                        <button
-                          type="button"
-                          onClick={speakAudioScript}
-                          className="px-3.5 py-1.5 bg-mint-600 hover:bg-mint-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                        >
-                          <FaPlay className="text-[10px]" /> <span>Listen Audio Instructions</span>
-                        </button>
-                      ) : isPausedAudio ? (
-                        <button
-                          type="button"
-                          onClick={handleResumeAudio}
-                          className="px-3.5 py-1.5 bg-mint-600 hover:bg-mint-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                        >
-                          <FaPlay className="text-[10px]" /> <span>Resume Audio</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handlePauseAudio}
-                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                        >
-                          <FaPause className="text-[10px]" /> <span>Pause</span>
-                        </button>
-                      )}
-
-                      {isPlayingAudio && (
-                        <button
-                          type="button"
-                          onClick={handleStopAudio}
-                          className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition-all"
-                        >
-                          <FaStop className="text-[10px]" /> <span>Stop</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Multilingual Translation Text Preview with Readable Line Height */}
-                    {getAudioScriptForSelectedLang() && (
-                      <div className="p-2.5 bg-white/95 dark:bg-[#0B1220] rounded-xl border border-mint-200/80 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 leading-relaxed max-h-24 overflow-y-auto shadow-inner">
-                        <div className="flex items-center justify-between text-[10px] font-bold text-mint-800 dark:text-mint-400 mb-1 pb-1 border-b border-slate-100 dark:border-slate-800">
-                          <span>
-                            {audioLang.startsWith('te') ? '🔊 తెలుగు అనువాదం (Telugu Transcript)' :
-                             audioLang.startsWith('hi') ? '🔊 हिंदी अनुवाद (Hindi Transcript)' :
-                             audioLang.startsWith('mr') ? '🔊 मराठी भाषांतर (Marathi Transcript)' :
-                             '🔊 English Voice Guidance Transcript'}
-                          </span>
-                          <span className="font-mono text-[9px] text-slate-400">
-                            {isPlayingAudio ? '● Streaming Audio' : 'Ready'}
-                          </span>
-                        </div>
-                        <p className="font-medium text-[11.5px] leading-relaxed tracking-normal">{getAudioScriptForSelectedLang()}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 4. Quick Action: Open AI Voice Assistant Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('open-voice-assistant', {
-                      detail: { prescriptionContext: analyzed.medicines }
-                    }));
-                  }}
-                  className="w-full py-2.5 px-3 bg-gradient-to-r from-mint-500 to-tealSoft-500 hover:from-mint-600 hover:to-tealSoft-600 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 shadow-sm transition-all shrink-0"
-                >
-                  <FaRobot className="text-sm" />
-                  <span>💬 Ask Voice Assistant About These Dosages & Timings</span>
-                </button>
-
-                {/* 5. Expandable Raw OCR Text Footer */}
-                <div className="pt-1.5 border-t border-slate-100 dark:border-slate-700/80 shrink-0">
+                {/* Expandable Raw OCR Text Footer */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700/80 shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowRawDetails(!showRawDetails)}
                     className="w-full text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold flex items-center justify-between py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <span>{showRawDetails ? 'Hide Full Raw Text Details' : 'Show Full Raw Text Details'}</span>
+                    <span>{showRawDetails ? 'Hide Full Raw OCR Text' : 'Show Full Raw OCR Text'}</span>
                     {showRawDetails ? <FaChevronUp /> : <FaChevronDown />}
                   </button>
 
                   {showRawDetails && (
-                    <div className="mt-1.5 p-2.5 bg-slate-900 text-slate-200 font-mono text-[10px] rounded-xl max-h-24 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                    <div className="mt-2 p-3 bg-slate-900 text-slate-200 font-mono text-[11px] rounded-xl max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed">
                       {analyzed.extracted_text}
                     </div>
                   )}
@@ -738,7 +861,6 @@ const UploadDocument = () => {
         </div>
 
       </div>
-
     </div>
   );
 };

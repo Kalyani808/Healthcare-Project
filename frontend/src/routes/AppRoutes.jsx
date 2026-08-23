@@ -18,6 +18,8 @@ import DocumentHistory from '../pages/patient/DocumentHistory';
 import AIChatAssistant from '../pages/patient/AIChatAssistant';
 import AppointmentsPage from '../pages/patient/AppointmentsPage';
 import HealthReportsPage from '../pages/patient/HealthReportsPage';
+import MedicationReminders from '../pages/patient/MedicationReminders';
+import EmergencyAssistance from '../pages/patient/EmergencyAssistance';
 
 import DoctorDashboard from '../pages/doctor/DoctorDashboard';
 import DoctorProfile from '../pages/doctor/DoctorProfile';
@@ -43,6 +45,8 @@ const AppRoutes = () => {
         <Route path="dashboard" element={<PatientDashboard />} />
         <Route path="profile" element={<PatientProfile />} />
         <Route path="upload-document" element={<UploadDocument />} />
+        <Route path="reminders" element={<MedicationReminders />} />
+        <Route path="emergency" element={<EmergencyAssistance />} />
         <Route path="document-history" element={<DocumentHistory />} />
         <Route path="ai-assistant" element={<AIChatAssistant />} />
         <Route path="appointments" element={<AppointmentsPage />} />

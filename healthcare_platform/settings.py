@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'accounts', 
     'documents',
+    'reminders',
+    'emergency',
 ]
 
 REST_FRAMEWORK = {

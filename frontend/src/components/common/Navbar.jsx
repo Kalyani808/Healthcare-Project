@@ -17,7 +17,9 @@ import {
   FaCheckCircle,
   FaCalendarAlt,
   FaSun,
-  FaMoon
+  FaMoon,
+  FaClock,
+  FaAmbulance
 } from 'react-icons/fa';
 
 const Navbar = () => {
@@ -172,6 +174,28 @@ const Navbar = () => {
                 >
                   <FaFileUpload className="text-mint-500" />
                   <span>Upload Rx</span>
+                </Link>
+                <Link
+                  to="/patient/reminders"
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                    isActive('/patient/reminders')
+                      ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border-b-2 border-amber-500'
+                      : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                  }`}
+                >
+                  <FaClock className="text-amber-500" />
+                  <span>Reminders</span>
+                </Link>
+                <Link
+                  to="/patient/emergency"
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                    isActive('/patient/emergency')
+                      ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 font-bold border-b-2 border-rose-500'
+                      : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                  }`}
+                >
+                  <FaAmbulance className="text-rose-500" />
+                  <span>Emergency</span>
                 </Link>
                 <Link
                   to="/patient/ai-assistant"

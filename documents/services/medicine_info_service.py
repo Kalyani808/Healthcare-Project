@@ -1,118 +1,227 @@
 import re
 
-MEDICINE_PURPOSE_DICTIONARY = {
+MEDICINE_USAGE_DATABASE = {
     "augmentin": {
-        "purpose": "Broad-spectrum antibiotic (Amoxicillin + Clavulanic Acid)",
-        "general_use": "Commonly prescribed to treat bacterial infections of the chest, throat, ears, sinuses, or skin.",
-        "precautions": "Take as instructed by your doctor. Complete the full prescribed course even if symptoms improve early."
-    },
-    "ultracit": {
-        "purpose": "Antacid and alkalinizing agent",
-        "general_use": "Used to relieve acidity, heartburn, or burning sensations during urination.",
-        "precautions": "Drink adequate water throughout the day while taking this medication."
-    },
-    "pan": {
-        "purpose": "Proton Pump Inhibitor (Pantoprazole)",
-        "general_use": "Reduces stomach acid production to treat acidity, heartburn, and acid reflux.",
-        "precautions": "Best taken 30 minutes before breakfast as prescribed."
-    },
-    "pan-dsr": {
-        "purpose": "Combination Antacid & Anti-emetic (Pantoprazole + Domperidone)",
-        "general_use": "Treats severe acid reflux, GERD, nausea, and indigestion.",
-        "precautions": "Usually taken on an empty stomach, 30 minutes before breakfast."
-    },
-    "paracetamol": {
-        "purpose": "Analgesic and Antipyretic",
-        "general_use": "Commonly used for pain relief and fever reduction.",
-        "precautions": "Do not exceed recommended daily dose to protect liver health."
-    },
-    "crocin": {
-        "purpose": "Analgesic and Antipyretic (Paracetamol)",
-        "general_use": "Used for pain relief and fever reduction.",
-        "precautions": "Maintain proper intervals between doses as advised."
-    },
-    "dolo": {
-        "purpose": "Analgesic and Antipyretic (Paracetamol 650mg)",
-        "general_use": "Used for relief from fever, body aches, and headaches.",
-        "precautions": "Follow exact dosage intervals specified by your physician."
+        "category": "Antibiotic",
+        "category_te": "యాంటీబయాటిక్",
+        "category_hi": "एंटीबायोटिक",
+        "category_mr": "अँटीबायोटिक",
+        "usage_en": "Bacterial infections of throat, chest, ear, sinus, or skin (Antibiotic)",
+        "usage_te": "గొంతు, ఛాతీ, చెవి మరియు చర్మం యొక్క బాక్టీరియల్ ఇన్ఫెక్షన్ల చికిత్స కోసం (యాంటీబయాటిక్)",
+        "usage_hi": "गले, छाती, कान और त्वचा के बैक्टीरिया इन्फेक्शन के इलाज के लिए (एंटीबायोटिक)",
+        "usage_mr": "घसा, छाती, कान आणि त्वचेच्या जिवाणू संसर्गाच्या उपचारासाठी (अँटीबायोटिक)",
+        "precautions_en": "Complete the full prescribed course even if symptoms improve early."
     },
     "amoxicillin": {
-        "purpose": "Penicillin Antibiotic",
-        "general_use": "Used to treat various bacterial infections.",
-        "precautions": "Complete the full antibiotic course prescribed by your doctor."
+        "category": "Antibiotic",
+        "category_te": "యాంటీబయాటిక్",
+        "category_hi": "एंटीबायोटिक",
+        "category_mr": "अँटीबायोटिक",
+        "usage_en": "Broad-spectrum penicillin antibiotic treating bacterial infections",
+        "usage_te": "బాక్టీరియల్ ఇన్ఫెక్షన్లను నయం చేసే యాంటీబయాటిక్ మందు",
+        "usage_hi": "बैक्टीरिया संक्रमण के इलाज के लिए एंटीबायोटिक दवा",
+        "usage_mr": "जिवाणू संसर्गाच्या उपचारासाठी अँटीबायोटिक",
+        "precautions_en": "Take regularly at scheduled times until course is complete."
+    },
+    "ultracet": {
+        "category": "Pain Relief & Analgesic",
+        "category_te": "నొప్పి నివారిణి",
+        "category_hi": "दर्द निवारक",
+        "category_mr": "वेदना शामक",
+        "usage_en": "Relief from moderate to severe pain, joint stiffness, and dental pain",
+        "usage_te": "తీవ్రమైన నొప్పి, కీళ్ల నొప్పులు మరియు పంటి నొప్పి నివారణ కోసం",
+        "usage_hi": "गंभीर दर्द, जोड़ों के दर्द और दांतों के दर्द से राहत के लिए",
+        "usage_mr": "तीव्र वेदना, सांधेदुखी आणि दातांच्या वेदना कमी करण्यासाठी",
+        "precautions_en": "Take after meals with water."
+    },
+    "pan-dsr": {
+        "category": "Antacid & Gas Relief",
+        "category_te": "ఎసిడిటీ మరియు గ్యాస్ నివారిణి",
+        "category_hi": "एसिडिटी और गैस निवारक",
+        "category_mr": "पित्त आणि गॅस निवारक",
+        "usage_en": "Treats severe acidity, heartburn, acid reflux (GERD), and nausea",
+        "usage_te": "తీవ్రమైన ఎసిడిటీ, గుండెల్లో మంట, గ్యాస్ మరియు వికారం నివారణ కోసం",
+        "usage_hi": "गंभीर एसिडिटी, सीने में जलन, गैस और उल्टी/मतली के इलाज के लिए",
+        "usage_mr": "तीव्र पित्त, छातीत जळजळ, गॅस आणि मळमळ दूर करण्यासाठी",
+        "precautions_en": "Best taken empty stomach, 30 minutes before breakfast."
+    },
+    "pantoprazole": {
+        "category": "Antacid / Proton Pump Inhibitor",
+        "category_te": "ఎసిడిటీ నివారిణి",
+        "category_hi": "एसिडिटी की दवा",
+        "category_mr": "पित्तनाशक औषध",
+        "usage_en": "Reduces excess stomach acid, relieves heartburn and stomach ulcers",
+        "usage_te": "కడుపులో అదనపు ఆమ్లాన్ని తగ్గించి, మంట మరియు అల్సర్లను నయం చేయడానికి",
+        "usage_hi": "पेट के अतिरिक्त एसिड को कम करता है और सीने में जलन से राहत देता है",
+        "usage_mr": "पोटातील ॲसिड कमी करून जळजळ आणि अल्सरपासून आराम देतो",
+        "precautions_en": "Take once daily in the morning before food."
+    },
+    "paracetamol": {
+        "category": "Fever & Pain Relief",
+        "category_te": "జ్వరం మరియు నొప్పి నివారిణి",
+        "category_hi": "बुखार और दर्द निवारक",
+        "category_mr": "ताप आणि वेदनाशामक",
+        "usage_en": "Lowers fever, relieves headaches, body aches, and mild-to-moderate pain",
+        "usage_te": "జ్వరాన్ని తగ్గించడానికి, తలనొప్పి మరియు ఒంటి నొప్పుల నివారణ కోసం",
+        "usage_hi": "बुखार कम करने, सिरदर्द और बदन दर्द से राहत पाने के लिए",
+        "usage_mr": "ताप कमी करण्यासाठी, डोकेदुखी आणि अंगदुखीपासून आराम मिळवण्यासाठी",
+        "precautions_en": "Take after meals. Maintain at least 6 hours between doses."
+    },
+    "dolo": {
+        "category": "Fever & Pain Relief (650mg)",
+        "category_te": "జ్వరం మరియు ఒంటి నొప్పులు (650mg)",
+        "category_hi": "बुखार और बदन दर्द की दवा",
+        "category_mr": "ताप आणि तीव्र अंगदुखी",
+        "usage_en": "Fast relief from high fever, body pain, and viral infections",
+        "usage_te": "తీవ్రమైన జ్వరం, ఒంటి నొప్పులు మరియు వైరల్ ఇన్ఫెక్షన్ల నుండి ఉపశమనం",
+        "usage_hi": "तेज बुखार, बदन दर्द और वायरल संक्रमण से तेजी से राहत के लिए",
+        "usage_mr": "तीव्र ताप, अंगदुखी आणि व्हायरल इन्फेक्शनपासून जलद आराम",
+        "precautions_en": "Do not exceed 3-4 tablets in 24 hours."
     },
     "azithromycin": {
-        "purpose": "Macrolide Antibiotic",
-        "general_use": "Prescribed for respiratory, throat, ear, or skin bacterial infections.",
-        "precautions": "Take once daily at the same time each day as directed."
+        "category": "Antibiotic (Macrolide)",
+        "category_te": "యాంటీబయాటిక్",
+        "category_hi": "एंटीबायोटिक दवा",
+        "category_mr": "अँटीबायोटिक",
+        "usage_en": "Treats severe respiratory chest infections, tonsillitis, and typhoid",
+        "usage_te": "ఛాతీ ఇన్ఫెక్షన్లు, టాన్సిల్స్ మరియు టైఫాయిడ్ బాక్టీరియల్ ఇన్ఫెక్షన్ల చికిత్స",
+        "usage_hi": "छाती के इन्फेक्शन, टॉन्सिल और टाइफाइड के इलाज के लिए",
+        "usage_mr": "छातीतील इन्फेक्शन, टॉन्सिल्स आणि विषमज्वराच्या उपचारासाठी",
+        "precautions_en": "Take once daily at the same time."
     },
     "cetirizine": {
-        "purpose": "Antihistamine",
-        "general_use": "Relieves allergy symptoms like runny nose, sneezing, and itching.",
-        "precautions": "May cause mild drowsiness. Avoid driving if feeling drowsy."
+        "category": "Antiallergic / Antihistamine",
+        "category_te": "అలెర్జీ నివారిణి",
+        "category_hi": "एलर्जी की दवा",
+        "category_mr": "ॲलर्जी प्रतिबंधक",
+        "usage_en": "Relieves allergy symptoms, cold, runny nose, sneezing, and skin itching",
+        "usage_te": "జలుబు, తుమ్ములు, ముక్కు కారడం మరియు చర్మంపై దురదల నివారణ కోసం",
+        "usage_hi": "सर्दी, जुकाम, छींक, बहती नाक और त्वचा की खुजली से राहत के लिए",
+        "usage_mr": "सर्दी, शिंका, नाक वाहणे आणि त्वचेवरील खाज कमी करण्यासाठी",
+        "precautions_en": "May cause mild drowsiness. Best taken at night."
+    },
+    "aceclofenac": {
+        "category": "Pain & Anti-inflammatory (NSAID)",
+        "category_te": "నొప్పి మరియు వాపు నివారిణి",
+        "category_hi": "दर्द और सूजन निवारक",
+        "category_mr": "वेदना व सूज कमी करणारे औषध",
+        "usage_en": "Relieves severe joint pain, arthritis, toothache, and muscular sprains",
+        "usage_te": "కీళ్ల నొప్పులు, ఆర్థరైటిస్, పంటి నొప్పి మరియు కండరాల వాపు నివారణ",
+        "usage_hi": "गठिया, जोड़ों का दर्द, दांत दर्द और मांसपेशियों के खिंचाव से राहत",
+        "usage_mr": "सांधेदुखी, सूज, दातदुखी आणि स्नायूंच्या दुखण्यापासून आराम",
+        "precautions_en": "Always take after food."
+    },
+    "zerodol-sp": {
+        "category": "Pain & Swelling Relief",
+        "category_te": "నొప్పి మరియు వాపు నివారిణి",
+        "category_hi": "दर्द और सूजन की दवा",
+        "category_mr": "वेदना आणि सूज शामक",
+        "usage_en": "Combats pain, tissue swelling, and speeds post-surgical recovery",
+        "usage_te": "శరీర నొప్పి, గాయాల వాపు తగ్గించి వేగంగా కోలుకోవడానికి ఉపయోగపడుతుంది",
+        "usage_hi": "दर्द, सूजन को कम करने और घाव को जल्दी ठीक करने के लिए",
+        "usage_mr": "वेदना आणि सूज कमी करण्यासाठी",
+        "precautions_en": "Take after meals with water."
     },
     "metformin": {
-        "purpose": "Oral Antidiabetic",
-        "general_use": "Helps control blood sugar levels in patients with Type 2 diabetes.",
-        "precautions": "Take with meals to reduce stomach upset."
-    },
-    "atorvastatin": {
-        "purpose": "Lipid-lowering Statin",
-        "general_use": "Used to lower cholesterol levels and support heart health.",
-        "precautions": "Best taken in the evening or at bedtime as advised."
+        "category": "Oral Antidiabetic",
+        "category_te": "షుగర్ నియంత్రణ (డయాబెటిస్)",
+        "category_hi": "मधुमेह नियंत्रण",
+        "category_mr": "मधुमेह नियंत्रण",
+        "usage_en": "Controls and lowers blood sugar glucose levels in Type 2 Diabetes",
+        "usage_te": "రక్తంలో చక్కెర (షుగర్) స్థాయిలను నియంత్రించడానికి మరియు తగ్గించడానికి",
+        "usage_hi": "टाइप-2 डायबिटीज में रक्त शर्करा (शुगर) को नियंत्रित करने के लिए",
+        "usage_mr": "रक्तातील साखरेचे प्रमाण नियंत्रित ठेवण्यासाठी",
+        "precautions_en": "Take with meals."
     },
     "amlodipine": {
-        "purpose": "Calcium Channel Blocker",
-        "general_use": "Prescribed to control high blood pressure (hypertension).",
-        "precautions": "Take regularly at the same time every day."
+        "category": "Blood Pressure (Antihypertensive)",
+        "category_te": "రక్తపోటు (బీపీ) నియంత్రణ",
+        "category_hi": "रक्तचाप नियंत्रण",
+        "category_mr": "रक्तदाब नियंत्रण",
+        "usage_en": "Lowers high blood pressure (hypertension) and protects heart health",
+        "usage_te": "అధిక రక్తపోటును (బీపీ) తగ్గించి, గుండెను రక్షించడానికి ఉపయోగపడుతుంది",
+        "usage_hi": "हाई ब्लड प्रेशर को नियंत्रित कर हृदय की रक्षा करता है",
+        "usage_mr": "उच्च रक्तदाब नियंत्रित करते",
+        "precautions_en": "Take regularly at the same time every day."
+    },
+    "telmisartan": {
+        "category": "Blood Pressure & Heart Protection",
+        "category_te": "బీపీ మరియు గుండె రక్షణ",
+        "category_hi": "ब्लड प्रेशर और हृदय सुरक्षा",
+        "category_mr": "रक्तदाब आणि हृदय संरक्षण",
+        "usage_en": "Maintains normal blood pressure and protects heart & kidneys",
+        "usage_te": "రక్తపోటును సాధారణ స్థాయిలో ఉంచి గుండెను కాపాడుతుంది",
+        "usage_hi": "रक्तचाप को सामान्य रखकर हृदय और गुर्दे की रक्षा करता है",
+        "usage_mr": "रक्तदाब नियंत्रित ठेवते",
+        "precautions_en": "Take once daily."
+    },
+    "atorvastatin": {
+        "category": "Cholesterol Lowering Statin",
+        "category_te": "కొలెస్ట్రాల్ నియంత్రణ",
+        "category_hi": "कोलेस्ट्रॉल कम करने की दवा",
+        "category_mr": "कोलेस्ट्रॉल नियंत्रण",
+        "usage_en": "Lowers bad cholesterol and protects against heart disease",
+        "usage_te": "శరీరంలో చెడు కొలెస్ట్రాల్‌ను తగ్గించి గుండెపోటును నివారిస్తుంది",
+        "usage_hi": "खराब कोलेस्ट्रॉल को कम कर हार्ट अटैक से बचाता है",
+        "usage_mr": "कोलेस्ट्रॉल कमी करण्यास मदत करते",
+        "precautions_en": "Take at night."
     }
 }
 
 class MedicineInfoService:
     @staticmethod
-    def get_medicine_info(med_name):
-        """
-        Retrieve safe general educational guidance for an extracted medicine name.
-        Does NOT alter prescribed dosage or replace doctor instructions.
-        """
+    def match_medicine_entry(med_name):
         if not med_name:
-            return "Follow timings and dosage strictly as instructed by your healthcare provider."
+            return None
+        clean = re.sub(r'[^a-zA-Z0-9]', '', str(med_name)).lower()
+        for key, entry in MEDICINE_USAGE_DATABASE.items():
+            clean_key = re.sub(r'[^a-zA-Z0-9]', '', key).lower()
+            if clean_key in clean or clean in clean_key:
+                return entry
 
-        clean = re.sub(r'[^a-zA-Z]', '', med_name).lower()
+        keywords = {
+            "augmentin": ["augmentin", "amoxicillin", "clavam", "amoxyclav", "moxikind"],
+            "ultracet": ["ultracet", "ultracit", "tramadol"],
+            "pan-dsr": ["pandsr", "pan-dsr", "pand", "pantoprazole", "pantocid", "pan"],
+            "paracetamol": ["paracetamol", "crocin", "dolo", "calpol", "pacimol"],
+            "aceclofenac": ["aceclofenac", "zerodol", "zerodolsp", "hifenac"],
+            "azithromycin": ["azithromycin", "azee", "azithral"],
+            "cetirizine": ["cetirizine", "cetzine", "alerid", "levocetirizine"],
+            "metformin": ["metformin", "glycomet", "glucophage"],
+            "amlodipine": ["amlodipine", "amlong", "norvasc"],
+            "telmisartan": ["telmisartan", "telma", "tazloc"],
+            "atorvastatin": ["atorvastatin", "atorva", "lipitor"]
+        }
 
-        for key, details in MEDICINE_PURPOSE_DICTIONARY.items():
-            if key in clean or clean in key:
-                return (
-                    f"{details['purpose']}. {details['general_use']} "
-                    f"General note: {details['precautions']}"
-                )
-
-        return (
-            f"Prescribed medication ({med_name}). Follow the exact dosage, frequency, and instructions "
-            "written on your prescription by your physician."
-        )
+        for p_key, aliases in keywords.items():
+            for alias in aliases:
+                if alias in clean or clean in alias:
+                    return MEDICINE_USAGE_DATABASE.get(p_key)
+        return None
 
     @classmethod
-    def enrich_medicines_with_info(cls, medicines_list):
-        """
-        Enrich a list of extracted medicine dictionaries with general educational information.
-        """
-        enriched = []
-        for med in medicines_list:
-            item = dict(med)
-            name = item.get("name") or item.get("medicine") or ""
-            if name:
-                item["info"] = cls.get_medicine_info(name)
-                enriched.append(item)
-        return enriched
+    def get_medicine_usage(cls, med_name, lang='en'):
+        entry = cls.match_medicine_entry(med_name)
+        if entry:
+            if lang == 'te': return entry.get("usage_te", entry.get("usage_en"))
+            elif lang == 'hi': return entry.get("usage_hi", entry.get("usage_en"))
+            elif lang == 'mr': return entry.get("usage_mr", entry.get("usage_en"))
+            return entry.get("usage_en", "")
+
+        if lang == 'te': return f"వైద్యుల సూచన ప్రకారం వాడవలసిన చికిత్సా మందు ({med_name})"
+        elif lang == 'hi': return f"डॉक्टर के निर्देशानुसार चिकित्सीय दवा ({med_name})"
+        elif lang == 'mr': return f"डॉक्टरांनी लिहून दिलेले औषध ({med_name})"
+        return f"Prescribed therapeutic medication ({med_name})"
+
+    @classmethod
+    def get_medicine_info(cls, med_name):
+        entry = cls.match_medicine_entry(med_name)
+        if entry:
+            return f"{entry['category']}: {entry['usage_en']}."
+        return f"Prescribed medication ({med_name}). Follow instructions as written on prescription."
 
     @classmethod
     def process_and_gate_medicines(cls, raw_medicines_list):
-        """
-        Hard Confidence Gate (Step 2):
-        - Items with confidence >= 0.75 and a valid non-null name are returned as confident_medicines.
-        - Items with confidence < 0.75, garbled text, or null name are moved to needs_verification list.
-        """
         confident = []
         needs_verification = []
 
@@ -120,24 +229,36 @@ class MedicineInfoService:
             med_name = item.get("name") or item.get("medicine")
             conf = float(item.get("confidence", 0.0))
 
-            # Reject hallucinated / low-confidence guesses
-            if med_name and med_name.strip() and conf >= 0.75:
-                enriched_item = dict(item)
-                enriched_item["name"] = med_name.strip().capitalize()
-                enriched_item["medicine"] = enriched_item["name"]
-                enriched_item["info"] = cls.get_medicine_info(enriched_item["name"])
-                confident.append(enriched_item)
+            if med_name and str(med_name).strip() and conf >= 0.75:
+                enriched = dict(item)
+                clean_name = str(med_name).strip().capitalize()
+                enriched["name"] = clean_name
+                enriched["medicine"] = clean_name
+
+                entry = cls.match_medicine_entry(clean_name)
+                enriched["category"] = entry["category"] if entry else "Prescribed Medication"
+                enriched["category_te"] = entry["category_te"] if entry else "వైద్య మందు"
+                enriched["category_hi"] = entry["category_hi"] if entry else "चिकित्सीय दवा"
+                enriched["category_mr"] = entry["category_mr"] if entry else "वैद्यकीय औषध"
+
+                enriched["usage"] = cls.get_medicine_usage(clean_name, 'en')
+                enriched["usage_te"] = cls.get_medicine_usage(clean_name, 'te')
+                enriched["usage_hi"] = cls.get_medicine_usage(clean_name, 'hi')
+                enriched["usage_mr"] = cls.get_medicine_usage(clean_name, 'mr')
+                enriched["info"] = cls.get_medicine_info(clean_name)
+
+                confident.append(enriched)
             else:
-                raw = item.get("raw_text") or item.get("raw_line") or med_name or ""
+                raw = item.get("raw_text") or item.get("raw_line") or str(med_name or "")
                 if raw and len(raw.strip()) > 2:
                     needs_verification.append({
                         "raw_text": raw.strip(),
-                        "suggested_name": med_name.strip() if med_name else "",
+                        "suggested_name": str(med_name).strip() if med_name else "",
                         "strength": item.get("strength") or item.get("dosage") or "",
                         "frequency": item.get("frequency") or "",
                         "duration": item.get("duration") or "",
                         "confidence": conf,
-                        "verification_reason": "Low confidence or garbled handwriting stroke — please verify manually"
+                        "verification_reason": "Low confidence or ambiguous stroke — please verify manually"
                     })
 
         return confident, needs_verification

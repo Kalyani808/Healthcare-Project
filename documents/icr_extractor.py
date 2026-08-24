@@ -282,12 +282,12 @@ class PrescriptionICR:
         print(f"\n========== ICR FAST OCR DEBUG ==========")
         print(f"Image: {image_path} (Original dimensions: {w}x{h})")
 
-        # Optimize resolution for fast CPU inference (max 1200px dimension)
+        # Optimize resolution for fast CPU inference (max 960px dimension)
         max_dim = max(w, h)
-        if max_dim > 1200:
-            scale = 1200.0 / max_dim
+        if max_dim > 960:
+            scale = 960.0 / max_dim
             proc_img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-        elif max_dim < 600:
+        elif max_dim < 500:
             proc_img = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
         else:
             proc_img = img
@@ -295,12 +295,12 @@ class PrescriptionICR:
         gray = cv2.cvtColor(proc_img, cv2.COLOR_BGR2GRAY) if len(proc_img.shape) == 3 else proc_img
 
         # Step 4: High-contrast CLAHE preprocessing
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
         var_clahe = clahe.apply(gray)
 
         # Step 5: Fast OCR Pass
         t_ocr_start = time.time()
-        pass1 = self.reader.readtext(var_clahe)
+        pass1 = self.reader.readtext(var_clahe, batch_size=4, paragraph=False)
         print(f"Fast EasyOCR pass completed in {round(time.time() - t_ocr_start, 2)}s! Found {len(pass1)} lines.")
 
         combined_lines = []

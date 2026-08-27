@@ -3,6 +3,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
+import CameraCaptureModal from '../../components/common/CameraCaptureModal';
 import api from '../../api/axios';
 import { parseDosagePattern } from '../../utils/dosageFormatter';
 import {
@@ -51,6 +52,7 @@ const UploadDocument = () => {
   // Active View Mode (Auto-detected from OCR or toggled by user)
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'audio_transcript', 'raw_ocr'
   const [documentMode, setDocumentMode] = useState('auto'); // 'auto', 'prescription', 'lab_report'
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Preferred Language: Telugu, Hindi, Marathi, English
   const [preferredLang, setPreferredLang] = useState(() => {
@@ -479,16 +481,30 @@ const UploadDocument = () => {
               />
 
               {!preview ? (
-                <label className="border-2 border-dashed border-teal-300 dark:border-slate-600 hover:border-teal-500 dark:hover:border-teal-400 bg-teal-50/20 dark:bg-slate-800/40 hover:bg-teal-50/40 dark:hover:bg-slate-800/70 rounded-2xl h-[240px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-3 p-5">
-                  <div className="w-14 h-14 rounded-2xl bg-teal-100 dark:bg-slate-700 text-teal-600 dark:text-teal-400 flex items-center justify-center text-2xl shadow-sm">
-                    <FaCloudUploadAlt />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Choose Image Source:</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCameraOpen(true)}
+                      className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 active:scale-95"
+                    >
+                      <FaCamera className="text-xs" />
+                      <span>Take Photo with Camera</span>
+                    </button>
                   </div>
-                  <div className="text-center space-y-1">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Click or drag prescription / lab report photo</p>
-                    <p className="text-xs text-slate-400">Supports JPG, PNG, WEBP medical reports & prescriptions</p>
-                  </div>
-                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                </label>
+
+                  <label className="border-2 border-dashed border-teal-300 dark:border-slate-600 hover:border-teal-500 dark:hover:border-teal-400 bg-teal-50/20 dark:bg-slate-800/40 hover:bg-teal-50/40 dark:hover:bg-slate-800/70 rounded-2xl h-[200px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-2.5 p-5">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-slate-700 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl shadow-sm">
+                      <FaCloudUploadAlt />
+                    </div>
+                    <div className="text-center space-y-0.5">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Click to browse or drag file here</p>
+                      <p className="text-[10px] text-slate-400">Supports JPG, PNG, WEBP medical reports & prescriptions</p>
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  </label>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 font-semibold px-1">
@@ -951,6 +967,23 @@ const UploadDocument = () => {
         </div>
 
       </div>
+
+      {/* 📷 Live Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={(capturedFile, previewUrl) => {
+          setFile(capturedFile);
+          setPreview(previewUrl);
+          setDocName(capturedFile.name.replace(/\.[^/.]+$/, ''));
+          setAnalyzed(null);
+          setInlineError(null);
+          setIsExtendedProcessing(false);
+          setSyncedCount(null);
+          handleStopAudio();
+        }}
+        title="Snap Doctor Prescription / Lab Report Photo"
+      />
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
+import CameraCaptureModal from '../../components/common/CameraCaptureModal';
 import api from '../../api/axios';
 import { 
   FaRobot, 
@@ -18,7 +19,7 @@ import {
   FaLightbulb, 
   FaClock, 
   FaShieldAlt, 
-  FaTrashAlt,
+  FaCamera,
   FaImage
 } from 'react-icons/fa';
 
@@ -37,6 +38,7 @@ const AIChatAssistant = () => {
   const [activeMedicines, setActiveMedicines] = useState([]);
   const [prescriptionContext, setPrescriptionContext] = useState(null);
   const [uploadingRx, setUploadingRx] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Preferred Language: 'te', 'hi', 'mr', 'en'
   const [lang, setLang] = useState(() => {
@@ -85,47 +87,56 @@ const AIChatAssistant = () => {
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      
-      const langMap = { 'te': 'te-IN', 'hi': 'hi-IN', 'mr': 'mr-IN', 'en': 'en-IN' };
-      recognition.lang = langMap[lang] || 'en-IN';
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        
+        const langMap = { 'te': 'te-IN', 'hi': 'hi-IN', 'mr': 'mr-IN', 'en': 'en-IN' };
+        recognition.lang = langMap[lang] || 'en-IN';
 
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInputQuery(transcript);
-        setIsRecording(false);
-      };
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setInputQuery(transcript);
+          setIsRecording(false);
+        };
 
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-      };
+        recognition.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
+          setIsRecording(false);
+        };
 
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
+        recognition.onend = () => {
+          setIsRecording(false);
+        };
 
-      recognitionRef.current = recognition;
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn('SpeechRecognition initialization error:', e);
+      }
     }
   }, [lang]);
 
   const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in this browser. Please use Google Chrome or Edge.');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please type your query or use Google Chrome / Microsoft Edge.');
       return;
     }
 
     if (isRecording) {
-      recognitionRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setIsRecording(false);
     } else {
       try {
         const langMap = { 'te': 'te-IN', 'hi': 'hi-IN', 'mr': 'mr-IN', 'en': 'en-IN' };
-        recognitionRef.current.lang = langMap[lang] || 'en-IN';
-        recognitionRef.current.start();
-        setIsRecording(true);
+        if (recognitionRef.current) {
+          recognitionRef.current.lang = langMap[lang] || 'en-IN';
+          recognitionRef.current.start();
+          setIsRecording(true);
+        }
       } catch (err) {
         console.error('Failed to start voice recognition:', err);
         setIsRecording(false);
@@ -177,9 +188,8 @@ const AIChatAssistant = () => {
     }
   };
 
-  // Direct in-chat prescription upload
-  const handleUploadPrescriptionInChat = async (e) => {
-    const file = e.target.files[0];
+  // Process uploaded or camera-captured prescription file
+  const processPrescriptionFile = async (file) => {
     if (!file) return;
 
     setUploadingRx(true);
@@ -249,32 +259,77 @@ const AIChatAssistant = () => {
     }
   };
 
-  // Spoken voice playback of AI replies
-  const handlePlayVoice = (msg) => {
+  // Robust Spoken Voice Playback (POST Blob with Web Speech Fallback)
+  const handlePlayVoice = async (msg) => {
+    // If already playing this message, stop it
     if (audioObj) {
       audioObj.pause();
       setAudioObj(null);
       if (playingMsgId === msg.id) {
         setPlayingMsgId(null);
+        window.speechSynthesis?.cancel();
         return;
       }
     }
+    window.speechSynthesis?.cancel();
 
-    const cleanText = msg.text.replace(/[*#•_]/g, '');
-    const audioUrl = `http://127.0.0.1:8000/api/documents/speak/?text=${encodeURIComponent(cleanText)}&lang=${lang}`;
-    const newAudio = new Audio(audioUrl);
+    const cleanText = msg.text.replace(/[*#•_`]/g, '').trim();
+    if (!cleanText) return;
+
     setPlayingMsgId(msg.id);
-    setAudioObj(newAudio);
 
-    newAudio.play().catch(err => {
-      console.error('Audio playback failed:', err);
+    try {
+      // 1. Try Backend gTTS Speech Engine via POST Blob
+      const res = await api.post(
+        '/api/documents/speak/',
+        { text: cleanText.slice(0, 500), lang: lang },
+        { responseType: 'blob' }
+      );
+
+      const blobUrl = URL.createObjectURL(res.data);
+      const audio = new Audio(blobUrl);
+      setAudioObj(audio);
+
+      audio.onended = () => {
+        setPlayingMsgId(null);
+        setAudioObj(null);
+        URL.revokeObjectURL(blobUrl);
+      };
+
+      audio.onerror = () => {
+        fallbackBrowserSpeech(cleanText, msg.id);
+      };
+
+      await audio.play();
+    } catch (err) {
+      console.warn('Backend TTS failed, using browser speech synthesis fallback:', err);
+      fallbackBrowserSpeech(cleanText, msg.id);
+    }
+  };
+
+  const fallbackBrowserSpeech = (text, msgId) => {
+    if (!('speechSynthesis' in window)) {
       setPlayingMsgId(null);
-    });
+      return;
+    }
 
-    newAudio.onended = () => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const langMap = { 'te': 'te-IN', 'hi': 'hi-IN', 'mr': 'mr-IN', 'en': 'en-IN' };
+    utterance.lang = langMap[lang] || 'en-IN';
+    utterance.rate = 0.95;
+
+    utterance.onend = () => {
       setPlayingMsgId(null);
       setAudioObj(null);
     };
+
+    utterance.onerror = () => {
+      setPlayingMsgId(null);
+      setAudioObj(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
   };
 
   return (
@@ -326,10 +381,10 @@ const AIChatAssistant = () => {
         </div>
       </div>
 
-      {/* 💊 PRESCRIPTION CONTEXT BAR */}
-      <div className="p-3.5 bg-teal-50 dark:bg-slate-800/90 border border-teal-200/80 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+      {/* 💊 PRESCRIPTION CONTEXT BAR WITH CAMERA & FILE UPLOAD */}
+      <div className="p-4 bg-teal-50 dark:bg-slate-800/90 border border-teal-200/80 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center text-sm shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center text-sm shrink-0 shadow-xs">
             <FaPills />
           </div>
           <div>
@@ -339,28 +394,38 @@ const AIChatAssistant = () => {
             <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
               {activeMedicines.length > 0 
                 ? activeMedicines.map(m => m.name || m.medicine_name).join(', ')
-                : 'Augmentin 625mg, Pan-D, Dolo 650 (Default Protocol)'}
+                : 'Augmentin 625mg, Pan-D, Dolo 650 (Default Clinical Protocol)'}
             </span>
           </div>
         </div>
 
-        {/* 📎 In-Chat Upload Button */}
-        <div>
+        {/* 📷 Live Camera & 📁 Upload File Action Buttons */}
+        <div className="flex items-center space-x-2 shrink-0">
           <input
             type="file"
             ref={fileInputRef}
-            onChange={handleUploadPrescriptionInChat}
+            onChange={(e) => processPrescriptionFile(e.target.files[0])}
             accept="image/*"
             className="hidden"
           />
+
+          <button
+            type="button"
+            onClick={() => setIsCameraOpen(true)}
+            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
+          >
+            <FaCamera className="text-xs" />
+            <span>Open Camera</span>
+          </button>
+
           <button
             type="button"
             disabled={uploadingRx}
             onClick={() => fileInputRef.current?.click()}
-            className="px-3.5 py-1.5 bg-white dark:bg-[#1E293B] hover:bg-teal-50 border border-teal-200 dark:border-slate-700 text-teal-700 dark:text-teal-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
+            className="px-3 py-1.5 bg-white dark:bg-[#1E293B] hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-200 dark:border-slate-700 text-teal-700 dark:text-teal-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
           >
             {uploadingRx ? <FaSpinner className="animate-spin text-xs" /> : <FaFileUpload className="text-xs" />}
-            <span>{uploadingRx ? 'Scanning Rx...' : 'Upload Rx Image'}</span>
+            <span>{uploadingRx ? 'Scanning...' : 'Upload File'}</span>
           </button>
         </div>
       </div>
@@ -420,10 +485,10 @@ const AIChatAssistant = () => {
                   <button
                     type="button"
                     onClick={() => handlePlayVoice(msg)}
-                    className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all shadow-xs ${
                       playingMsgId === msg.id
                         ? 'bg-rose-600 text-white animate-pulse'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-slate-700 hover:text-teal-700'
+                        : 'bg-slate-100 dark:bg-slate-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700'
                     }`}
                   >
                     {playingMsgId === msg.id ? <FaStop /> : <FaVolumeUp />}
@@ -455,7 +520,7 @@ const AIChatAssistant = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* ⌨️ INPUT CONTROL BAR */}
+        {/* ⌨️ INPUT CONTROL BAR WITH MIC & CAMERA */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-700/80">
           <form
             onSubmit={(e) => {
@@ -464,10 +529,21 @@ const AIChatAssistant = () => {
             }}
             className="flex items-center space-x-2"
           >
+            {/* Live Camera Button */}
+            <button
+              type="button"
+              onClick={() => setIsCameraOpen(true)}
+              className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-400 rounded-2xl transition-all shadow-xs"
+              title="Take Photo with Camera"
+            >
+              <FaCamera className="text-base" />
+            </button>
+
+            {/* Voice Microphone Button */}
             <button
               type="button"
               onClick={toggleRecording}
-              className={`p-3 rounded-2xl transition-all ${
+              className={`p-3 rounded-2xl transition-all shadow-xs ${
                 isRecording
                   ? 'bg-rose-600 text-white animate-pulse shadow-md'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -500,6 +576,14 @@ const AIChatAssistant = () => {
         </div>
 
       </Card>
+
+      {/* 📷 Live Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={(file) => processPrescriptionFile(file)}
+        title="Snap Doctor Prescription / Lab Report Photo"
+      />
 
     </div>
   );

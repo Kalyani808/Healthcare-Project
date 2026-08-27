@@ -14,7 +14,9 @@ import {
   FaClock,
   FaAmbulance,
   FaShieldAlt,
-  FaHeartbeat
+  FaHeartbeat,
+  FaBookMedical,
+  FaLightbulb
 } from 'react-icons/fa';
 
 const Sidebar = () => {
@@ -24,6 +26,8 @@ const Sidebar = () => {
     { to: '/patient/dashboard', label: 'Overview', icon: FaChartLine },
     { to: '/patient/upload-document', label: 'Upload Rx & Reports', icon: FaFileUpload, badge: 'AI OCR' },
     { to: '/patient/reminders', label: 'Medication Reminders', icon: FaClock, badge: 'Daily' },
+    { to: '/patient/recommendations', label: 'AI Health Guidance', icon: FaLightbulb, badge: 'AI' },
+    { to: '/patient/education', label: 'Health Education', icon: FaBookMedical, badge: 'Guides' },
     { to: '/patient/emergency', label: 'Emergency & First Aid', icon: FaAmbulance, emergency: true },
     { to: '/patient/ai-assistant', label: 'Voice Health Sahayak', icon: FaRobot, badge: 'Smart' },
     { to: '/patient/document-history', label: 'Medical Documents Vault', icon: FaHistory },

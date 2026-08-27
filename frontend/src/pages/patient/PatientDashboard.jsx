@@ -18,22 +18,25 @@ import {
   FaVial, 
   FaPills,
   FaShieldAlt,
-  FaUserMd
+  FaBookMedical,
+  FaLightbulb
 } from 'react-icons/fa';
 
 const PatientDashboard = () => {
   const { user } = useAuth();
   const [todaySchedule, setTodaySchedule] = useState(null);
   const [recentDocs, setRecentDocs] = useState([]);
+  const [recommendations, setRecommendations] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        const [schedRes, docsRes] = await Promise.allSettled([
+        const [schedRes, docsRes, recsRes] = await Promise.allSettled([
           api.get('/api/reminders/schedules/today-schedule/'),
           api.get('/api/documents/'),
+          api.get('/api/recommendations/my-recommendations/'),
         ]);
 
         if (schedRes.status === 'fulfilled') {
@@ -42,6 +45,9 @@ const PatientDashboard = () => {
         if (docsRes.status === 'fulfilled') {
           const docData = docsRes.value.data.results || docsRes.value.data;
           setRecentDocs(Array.isArray(docData) ? docData.slice(0, 4) : []);
+        }
+        if (recsRes.status === 'fulfilled') {
+          setRecommendations(recsRes.value.data);
         }
       } catch (err) {
         console.error('Error loading patient dashboard:', err);
@@ -86,6 +92,36 @@ const PatientDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* 🤖 AI PERSONALIZED RECOMMENDATION QUICK BANNER */}
+      {recommendations?.insights?.length > 0 && (
+        <div className="p-4 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-slate-800 dark:to-slate-800/90 border border-teal-200 dark:border-teal-800 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-lg shrink-0 shadow-xs">
+              <FaLightbulb />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-black uppercase text-teal-800 dark:text-teal-300 bg-teal-100 dark:bg-teal-950 px-2 py-0.5 rounded">
+                  AI Recommendation
+                </span>
+                <span className="text-xs font-black text-slate-900 dark:text-slate-100">
+                  {recommendations.insights[0].title}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium line-clamp-1 mt-0.5">
+                {recommendations.insights[0].description}
+              </p>
+            </div>
+          </div>
+
+          <Link to="/patient/recommendations" className="shrink-0">
+            <button className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center space-x-1">
+              <span>View All</span> <FaArrowRight className="text-[9px]" />
+            </button>
+          </Link>
+        </div>
+      )}
 
       {/* 📊 CLINICAL VITALS & STATUS OVERVIEW CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -153,22 +189,22 @@ const PatientDashboard = () => {
       </div>
 
       {/* 🚀 QUICK ACTION WORKSPACE SHORTCUTS */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <Link to="/patient/upload-document">
-          <Card hoverable className="p-4 flex items-center space-x-3 border-teal-200/80 dark:border-slate-700 bg-teal-50/40 dark:bg-slate-800/60 h-full">
-            <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center text-base shrink-0 shadow-xs">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-teal-200/80 dark:border-slate-700 bg-teal-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center text-base shadow-xs">
               <FaFileUpload />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Upload Rx / Lab</h4>
+              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Upload Rx/Lab</h4>
               <p className="text-[10px] text-slate-400">Scan & Translate</p>
             </div>
           </Card>
         </Link>
 
         <Link to="/patient/reminders">
-          <Card hoverable className="p-4 flex items-center space-x-3 border-amber-200/80 dark:border-slate-700 bg-amber-50/40 dark:bg-slate-800/60 h-full">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-base shrink-0 shadow-xs">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-amber-200/80 dark:border-slate-700 bg-amber-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-base shadow-xs">
               <FaClock />
             </div>
             <div>
@@ -178,37 +214,49 @@ const PatientDashboard = () => {
           </Card>
         </Link>
 
-        <Link to="/patient/emergency">
-          <Card hoverable className="p-4 flex items-center space-x-3 border-rose-200/80 dark:border-slate-700 bg-rose-50/40 dark:bg-slate-800/60 h-full">
-            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-base shrink-0 shadow-xs">
-              <FaAmbulance />
+        <Link to="/patient/recommendations">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-emerald-200/80 dark:border-slate-700 bg-emerald-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-base shadow-xs">
+              <FaRobot />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Emergency 108</h4>
-              <p className="text-[10px] text-slate-400">First Aid & SOS</p>
+              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">AI Advice</h4>
+              <p className="text-[10px] text-slate-400">Diet & Follow-Up</p>
             </div>
           </Card>
         </Link>
 
-        <Link to="/patient/ai-assistant">
-          <Card hoverable className="p-4 flex items-center space-x-3 border-emerald-200/80 dark:border-slate-700 bg-emerald-50/40 dark:bg-slate-800/60 h-full">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-base shrink-0 shadow-xs">
-              <FaRobot />
+        <Link to="/patient/education">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-blue-200/80 dark:border-slate-700 bg-blue-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shadow-xs">
+              <FaBookMedical />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Voice Sahayak</h4>
-              <p className="text-[10px] text-slate-400">AI Medical Chat</p>
+              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Health Guides</h4>
+              <p className="text-[10px] text-slate-400">Maternal & Child</p>
+            </div>
+          </Card>
+        </Link>
+
+        <Link to="/patient/emergency">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-rose-200/80 dark:border-slate-700 bg-rose-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-base shadow-xs">
+              <FaAmbulance />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Emergency 108</h4>
+              <p className="text-[10px] text-slate-400">SOS & First Aid</p>
             </div>
           </Card>
         </Link>
 
         <Link to="/patient/appointments">
-          <Card hoverable className="p-4 flex items-center space-x-3 border-blue-200/80 dark:border-slate-700 bg-blue-50/40 dark:bg-slate-800/60 h-full">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base shrink-0 shadow-xs">
+          <Card hoverable className="p-3.5 flex flex-col items-center text-center space-y-2 border-slate-200/80 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-800/60 h-full">
+            <div className="w-10 h-10 rounded-xl bg-slate-700 text-white flex items-center justify-center text-base shadow-xs">
               <FaCalendarCheck />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Doctor Consult</h4>
+              <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">Tele-Doctor</h4>
               <p className="text-[10px] text-slate-400">Appointments</p>
             </div>
           </Card>

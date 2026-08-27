@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     'documents',
     'reminders',
     'emergency',
+    'education',
+    'recommendations',
 ]
 
 REST_FRAMEWORK = {

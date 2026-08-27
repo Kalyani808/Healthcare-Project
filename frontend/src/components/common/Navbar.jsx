@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,7 +11,6 @@ import {
   FaFileUpload,
   FaRobot,
   FaChartLine,
-  FaEdit,
   FaChevronDown,
   FaBell,
   FaCheckCircle,
@@ -20,16 +19,26 @@ import {
   FaMoon,
   FaClock,
   FaAmbulance,
-  FaShieldAlt
+  FaHistory,
+  FaFileMedical,
+  FaBookMedical,
+  FaLightbulb,
+  FaUserMd
 } from 'react-icons/fa';
 
 const Navbar = () => {
   const { isAuthenticated, user, role, logoutUser } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
+  
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   
+  // Navigation Dropdown States
+  const [recordsMenuOpen, setRecordsMenuOpen] = useState(false);
+  const [dailyCareMenuOpen, setDailyCareMenuOpen] = useState(false);
+  const [consultMenuOpen, setConsultMenuOpen] = useState(false);
+
   const [visible, setVisible] = useState(true);
   const [prevScrollPos, setPrevScrollPos] = useState(0);
   
@@ -43,6 +52,9 @@ const Navbar = () => {
         setVisible(false);
         setProfileDropdownOpen(false);
         setNotificationsOpen(false);
+        setRecordsMenuOpen(false);
+        setDailyCareMenuOpen(false);
+        setConsultMenuOpen(false);
       } else {
         setVisible(true);
       }
@@ -52,6 +64,15 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [prevScrollPos]);
+
+  // Close dropdowns on route change
+  useEffect(() => {
+    setRecordsMenuOpen(false);
+    setDailyCareMenuOpen(false);
+    setConsultMenuOpen(false);
+    setProfileDropdownOpen(false);
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logoutUser();
@@ -69,12 +90,12 @@ const Navbar = () => {
   return (
     <nav className={`sticky top-0 z-50 transition-all duration-300 ${
       visible ? 'translate-y-0' : '-translate-y-full'
-    } bg-white/90 dark:bg-[#0B1220]/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-1`}>
+    } bg-white/95 dark:bg-[#0B1220]/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs py-1`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           
           {/* Brand Logo */}
-          <Link to="/" className="flex items-center space-x-3 group select-none">
+          <Link to="/" className="flex items-center space-x-3 group select-none shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 group-hover:scale-105 transition-transform duration-300">
               <FaHeartbeat className="text-xl animate-pulse" />
             </div>
@@ -91,116 +112,245 @@ const Navbar = () => {
             </div>
           </Link>
 
-          {/* Desktop Navigation Links */}
+          {/* Desktop Segregated Navigation Links */}
           <div className="hidden md:flex items-center space-x-1 lg:space-x-2">
-            <Link
-              to="/"
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                isActive('/') 
-                  ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-xs' 
-                  : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              Home
-            </Link>
-
+            
+            {/* Public Links */}
             {!isDashboardPage && (
               <>
                 <Link
+                  to="/"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    isActive('/') 
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white'
+                  }`}
+                >
+                  Home
+                </Link>
+                <Link
                   to="/about"
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     isActive('/about') 
-                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-xs' 
-                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white'
                   }`}
                 >
                   About
                 </Link>
                 <Link
                   to="/services"
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     isActive('/services') 
-                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-xs' 
-                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white'
                   }`}
                 >
                   Services
                 </Link>
-                <Link
-                  to="/contact"
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    isActive('/contact') 
-                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-xs' 
-                      : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  Contact
-                </Link>
               </>
             )}
 
+            {/* Authenticated Dashboard Link */}
             {isAuthenticated && (
               <Link
                 to={role === 'doctor' ? '/doctor/dashboard' : '/patient/dashboard'}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
                   isActive('/patient/dashboard') || isActive('/doctor/dashboard') 
                     ? 'bg-teal-600 text-white shadow-sm' 
-                    : 'text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 <FaChartLine className="text-sm" />
-                <span>Dashboard</span>
+                <span>Overview</span>
               </Link>
             )}
 
+            {/* 📑 SUITE 1: Medical Records Dropdown */}
             {isAuthenticated && role === 'patient' && (
-              <>
-                <Link
-                  to="/patient/upload-document"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                    isActive('/patient/upload-document')
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-slate-800'
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setRecordsMenuOpen(!recordsMenuOpen);
+                    setDailyCareMenuOpen(false);
+                    setConsultMenuOpen(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                    isActive('/patient/upload-document') || isActive('/patient/document-history') || isActive('/patient/health-reports')
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-slate-700'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <FaFileUpload />
-                  <span>Upload Rx & Lab</span>
-                </Link>
-                <Link
-                  to="/patient/reminders"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                    isActive('/patient/reminders')
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <FaClock />
-                  <span>Reminders</span>
-                </Link>
-                <Link
-                  to="/patient/emergency"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                    isActive('/patient/emergency')
-                      ? 'bg-rose-600 text-white shadow-sm'
-                      : 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <FaAmbulance />
-                  <span>Emergency 108</span>
-                </Link>
-                <Link
-                  to="/patient/ai-assistant"
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                    isActive('/patient/ai-assistant')
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <FaRobot />
-                  <span>Voice Sahayak</span>
-                </Link>
-              </>
+                  <FaFileUpload className="text-teal-600" />
+                  <span>Medical Records</span>
+                  <FaChevronDown className="text-[9px] text-slate-400" />
+                </button>
+
+                {recordsMenuOpen && (
+                  <div className="absolute left-0 mt-2 w-60 bg-white dark:bg-[#172033] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 space-y-1 animate-fadeIn z-50">
+                    <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Diagnostics & Records
+                    </div>
+                    <Link
+                      to="/patient/upload-document"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaFileUpload className="text-teal-600" />
+                      <div>
+                        <span className="block">Upload Rx & Lab Report</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Fast 5s OCR Analyzer</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/document-history"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaHistory className="text-emerald-600" />
+                      <div>
+                        <span className="block">Medical Documents Vault</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Encrypted records archive</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/health-reports"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaFileMedical className="text-blue-600" />
+                      <div>
+                        <span className="block">Health Diagnostic Summaries</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Doctor remarks & vitals</span>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* ⏰ SUITE 2: Daily Care Dropdown */}
+            {isAuthenticated && role === 'patient' && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setDailyCareMenuOpen(!dailyCareMenuOpen);
+                    setRecordsMenuOpen(false);
+                    setConsultMenuOpen(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                    isActive('/patient/reminders') || isActive('/patient/recommendations') || isActive('/patient/education')
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-slate-700'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <FaClock className="text-amber-500" />
+                  <span>Daily Care</span>
+                  <FaChevronDown className="text-[9px] text-slate-400" />
+                </button>
+
+                {dailyCareMenuOpen && (
+                  <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-[#172033] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 space-y-1 animate-fadeIn z-50">
+                    <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Adherence & Guidance
+                    </div>
+                    <Link
+                      to="/patient/reminders"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaClock className="text-amber-500" />
+                      <div>
+                        <span className="block">Medication Reminders</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">3-Slot daily pill alarms</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/recommendations"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaLightbulb className="text-emerald-500" />
+                      <div>
+                        <span className="block">AI Health Recommendations</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Drug-diet rules & follow-ups</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/education"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaBookMedical className="text-blue-500" />
+                      <div>
+                        <span className="block">Health Education Guides</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Maternal, Child & Senior care</span>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 🩺 SUITE 3: Consultations & AI Assistant Dropdown */}
+            {isAuthenticated && role === 'patient' && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setConsultMenuOpen(!consultMenuOpen);
+                    setRecordsMenuOpen(false);
+                    setDailyCareMenuOpen(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                    isActive('/patient/appointments') || isActive('/patient/ai-assistant')
+                      ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-slate-700'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <FaUserMd className="text-blue-600" />
+                  <span>Consultations</span>
+                  <FaChevronDown className="text-[9px] text-slate-400" />
+                </button>
+
+                {consultMenuOpen && (
+                  <div className="absolute left-0 mt-2 w-60 bg-white dark:bg-[#172033] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 space-y-1 animate-fadeIn z-50">
+                    <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Medical Support
+                    </div>
+                    <Link
+                      to="/patient/appointments"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaCalendarAlt className="text-blue-600" />
+                      <div>
+                        <span className="block">Doctor Appointments</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Video & voice tele-consult</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/ai-assistant"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaRobot className="text-teal-600" />
+                      <div>
+                        <span className="block">Voice Health Sahayak</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Regional AI symptom chat</span>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 🚨 SUITE 4: 24/7 Emergency Speed Dial */}
+            {isAuthenticated && role === 'patient' && (
+              <Link
+                to="/patient/emergency"
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all select-none ${
+                  isActive('/patient/emergency')
+                    ? 'bg-rose-600 text-white shadow-md'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 hover:bg-rose-100'
+                }`}
+              >
+                <FaAmbulance className="text-rose-600 dark:text-rose-400" />
+                <span>Emergency 108</span>
+              </Link>
+            )}
+
           </div>
 
           {/* Right Action Icons & Auth Profile */}
@@ -218,7 +368,7 @@ const Navbar = () => {
             {isAuthenticated ? (
               <div className="flex items-center space-x-3">
                 
-                {/* Notifications Dropdown Trigger */}
+                {/* Notifications Dropdown */}
                 <div className="relative">
                   <button
                     onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -329,16 +479,27 @@ const Navbar = () => {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-4 pt-2 pb-6 space-y-3 shadow-lg">
+        <div className="md:hidden bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-4 pt-2 pb-6 space-y-2 shadow-lg">
           <Link to="/" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Home</Link>
           {isAuthenticated && (
-            <>
+            <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
               <Link to={role === 'doctor' ? '/doctor/dashboard' : '/patient/dashboard'} onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400">Dashboard</Link>
-              <Link to="/patient/upload-document" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Upload Rx & Lab</Link>
-              <Link to="/patient/reminders" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400">Reminders</Link>
-              <Link to="/patient/emergency" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-rose-600">Emergency 108</Link>
+              <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Medical Records</div>
+              <Link to="/patient/upload-document" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Upload Rx & Lab</Link>
+              <Link to="/patient/document-history" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Documents Vault</Link>
+              <Link to="/patient/health-reports" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Health Test Reports</Link>
+              
+              <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Daily Care</div>
+              <Link to="/patient/reminders" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400">Medication Reminders</Link>
+              <Link to="/patient/recommendations" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400">AI Health Guidance</Link>
+              <Link to="/patient/education" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400">Health Education Guides</Link>
+              
+              <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Medical Support</div>
+              <Link to="/patient/appointments" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Doctor Appointments</Link>
+              <Link to="/patient/ai-assistant" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Voice Health Sahayak</Link>
+              <Link to="/patient/emergency" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-rose-600">🚨 Emergency 108</Link>
               <button onClick={() => { setMobileMenuOpen(false); handleLogout(); }} className="block w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-rose-600">Sign Out</button>
-            </>
+            </div>
           )}
           {!isAuthenticated && (
             <div className="pt-2 flex flex-col space-y-2">

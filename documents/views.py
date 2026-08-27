@@ -251,7 +251,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     def ai_chat(self, request):
         """
         POST /api/documents/chat/ (or /api/chat/)
-        Generates conversational response using local Ollama Mistral LLM with conversation history.
+        Generates conversational response with prescription awareness and Indian pharmacology intelligence.
         """
         messages_history = request.data.get('messages', [])
         if not messages_history and 'query' in request.data:
@@ -263,6 +263,39 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        prescription_context = request.data.get('prescription_context')
+        lang = request.data.get('lang', 'en').lower()
+        if lang.startswith('te'): lang = 'te'
+        elif lang.startswith('hi'): lang = 'hi'
+        elif lang.startswith('mr'): lang = 'mr'
+        else: lang = 'en'
+
+        # If user is authenticated and no explicit prescription context was passed, automatically attach their active medicines
+        if not prescription_context and request.user and request.user.is_authenticated:
+            try:
+                from reminders.models import MedicationSchedule
+                schedules = MedicationSchedule.objects.filter(user=request.user, is_active=True)
+                if schedules.exists():
+                    prescription_context = {
+                        "active_medicines": [
+                            {
+                                "name": s.medicine_name,
+                                "dosage": s.dosage,
+                                "timing": s.food_timing,
+                                "frequency": s.frequency,
+                                "instructions": s.instructions or s.usage_summary
+                            }
+                            for s in schedules
+                        ]
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to auto-fetch prescription context: {e}")
+
         from .services.chat_assistant_service import AIChatService
-        result = AIChatService.generate_chat_response(messages_history)
+        result = AIChatService.generate_chat_response(
+            messages_history=messages_history,
+            prescription_context=prescription_context,
+            user=request.user if request.user.is_authenticated else None,
+            lang=lang
+        )
         return Response(result, status=status.HTTP_200_OK)

@@ -115,6 +115,9 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         from .services.mistral_extraction_service import MistralExtractionService
         from .services.medicine_info_service import MedicineInfoService
         from .services.audio_service import AudioService
+        from .services.lab_report_service import detect_document_classification, extract_lab_test_parameters
+
+        doc_classification = detect_document_classification(extracted_str)
 
         mistral_service = MistralExtractionService()
         raw_meds, method = mistral_service.extract_medicines(extracted_str)
@@ -122,22 +125,31 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         # Hard confidence gate (>= 0.75 confidence and valid non-null name)
         confident_medicines, needs_verification_data = MedicineInfoService.process_and_gate_medicines(raw_meds)
 
-        # Generate multilingual audio scripts (English, Hindi, Marathi)
-        en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+        # Extract structured Lab & Diagnostic Test Parameters
+        lab_data = extract_lab_test_parameters(extracted_str)
 
-        print(f"[{method.upper()} RESULT] Found {len(confident_medicines)} confident medicines, {len(needs_verification_data)} needing verification")
+        # Generate multilingual audio scripts (Prescription or Lab Report)
+        if doc_classification == 'lab_report' and lab_data.get('is_lab_report'):
+            en_script = lab_data.get('audio_script', '')
+            audio_scripts = lab_data.get('audio_scripts', {})
+        else:
+            en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+
+        print(f"[{method.upper()} RESULT] Doc Classification: {doc_classification} | Meds: {len(confident_medicines)} | Lab Params: {lab_data.get('param_count', 0)}")
 
         medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in confident_medicines]
-        avg_conf = float(sum(m.get('confidence', 0.8) for m in confident_medicines) / len(confident_medicines)) if confident_medicines else 0.40
+        avg_conf = float(sum(m.get('confidence', 0.8) for m in confident_medicines) / len(confident_medicines)) if confident_medicines else (0.90 if lab_data.get('is_lab_report') else 0.50)
 
         return Response(
             {
                 "status": "complete",
                 "document_id": document.id,
+                "doc_classification": doc_classification,
                 "medicines_found": len(confident_medicines),
                 "medicines": confident_medicines,
                 "needs_verification": needs_verification_data,
                 "medicines_only": medicines_only_strings,
+                "lab_report": lab_data,
                 "audio_script": en_script,
                 "audio_scripts": audio_scripts,
                 "extraction_method": method,
@@ -145,14 +157,14 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 "image_quality": quality_metrics.get("image_quality", "medium"),
                 "quality_reason": quality_metrics.get("reason", ""),
                 "confidence": round(avg_conf, 2),
-                "num_lines": len(confident_medicines),
+                "num_lines": len(confident_medicines) + lab_data.get('param_count', 0),
                 "lines": [{"text": m} for m in medicines_only_strings],
                 "text": extracted_str,
                 "extracted_text": extracted_str,
                 "raw_ocr_text": extracted_str,
                 "is_handwritten_detected": True,
-                "requires_manual_review": len(confident_medicines) == 0,
-                "issues": "Medicines identified successfully" if len(confident_medicines) > 0 else "No medicines identified from prescription text."
+                "requires_manual_review": len(confident_medicines) == 0 and not lab_data.get('is_lab_report'),
+                "issues": "Document analyzed successfully" if (len(confident_medicines) > 0 or lab_data.get('is_lab_report')) else "No medicines or lab parameters identified from document."
             },
             status=status.HTTP_200_OK
         )
@@ -160,7 +172,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='audio')
     def get_document_audio(self, request, pk=None):
         """
-        Stream high-quality native MP3 audio for the prescription in Telugu, Hindi, Marathi, or English.
+        Stream high-quality native MP3 audio for the prescription or lab report in Telugu, Hindi, Marathi, or English.
         """
         from django.http import HttpResponse
         document = self.get_object()
@@ -173,16 +185,22 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         from .services.mistral_extraction_service import MistralExtractionService
         from .services.medicine_info_service import MedicineInfoService
         from .services.audio_service import AudioService
-        from .audio_generator import generate_audio_for_text
+        from .services.lab_report_service import detect_document_classification, extract_lab_test_parameters
 
         extracted_str = document.extracted_text or ""
-        mistral_service = MistralExtractionService()
-        raw_meds, _ = mistral_service.extract_medicines(extracted_str)
-        confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
+        doc_classification = detect_document_classification(extracted_str)
 
-        _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
-        script_text = audio_scripts.get(lang, audio_scripts.get('en', ''))
+        if doc_classification == 'lab_report':
+            lab_data = extract_lab_test_parameters(extracted_str)
+            script_text = lab_data.get('audio_scripts', {}).get(lang) or lab_data.get('audio_script', '')
+        else:
+            mistral_service = MistralExtractionService()
+            raw_meds, _ = mistral_service.extract_medicines(extracted_str)
+            confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
+            _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+            script_text = audio_scripts.get(lang, "")
 
+        from .audio_generator import generate_audio_for_text
         audio_bytes = generate_audio_for_text(script_text, lang=lang)
         return HttpResponse(audio_bytes, content_type="audio/mpeg")
 

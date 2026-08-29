@@ -70,6 +70,23 @@ const PatientDashboard = () => {
     fetchDashboardData();
   }, []);
 
+  const getDisplayName = () => {
+    if (user?.name && typeof user.name === 'string' && isNaN(Number(user.name)) && user.name.trim() !== '') {
+      return user.name;
+    }
+    if (user?.full_name && typeof user.full_name === 'string' && isNaN(Number(user.full_name)) && user.full_name.trim() !== '') {
+      return user.full_name;
+    }
+    if (user?.first_name || user?.last_name) {
+      const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+      if (full) return full;
+    }
+    if (user?.username && typeof user.username === 'string' && isNaN(Number(user.username)) && user.username.trim() !== '') {
+      return user.username.charAt(0).toUpperCase() + user.username.slice(1);
+    }
+    return 'Patient';
+  };
+
   return (
     <div className="space-y-10 pb-16">
       
@@ -82,7 +99,7 @@ const PatientDashboard = () => {
               <span>Patient Health Portal Active</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
-              Namaste, {user?.name || user?.username || 'Patient'}!
+              Namaste, {getDisplayName()}!
             </h1>
             <p className="text-sm text-slate-300 max-w-xl leading-relaxed">
               Your personal medical intelligence hub: Review active prescriptions, follow-up schedules, and certified health guides.

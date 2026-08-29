@@ -282,22 +282,18 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
 
   return (
     <>
-      {/* Floating Trigger Button (Bottom-Right Corner) */}
+      {/* Floating Trigger Button (Bottom-Right Circular FAB) */}
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-gradient-to-r from-mint-500 to-tealSoft-500 hover:from-mint-600 hover:to-tealSoft-600 text-white px-4 py-3.5 rounded-full shadow-2xl hover:shadow-mint-500/30 transition-all duration-300 transform hover:scale-105 group"
-          title="Open AI Voice Assistant (Telugu, Hindi, English, Marathi)"
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-mint-500 via-teal-600 to-tealSoft-600 hover:from-mint-600 hover:to-teal-700 text-white shadow-2xl hover:shadow-mint-500/50 transition-all duration-300 transform hover:scale-110 flex items-center justify-center group border-2 border-white/30"
+          title="AI Voice Sahayak (Telugu, Hindi, English, Marathi)"
         >
-          <div className="relative">
-            <FaRobot className="text-2xl animate-bounce [animation-duration:2.5s]" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full flex items-center justify-center">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+          <div className="relative flex items-center justify-center">
+            <FaRobot className="text-2xl text-white group-hover:rotate-12 transition-transform duration-300" />
+            <span className="absolute -top-2 -right-2 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
             </span>
-          </div>
-          <div className="text-left hidden sm:block">
-            <p className="text-xs font-extrabold leading-tight">AI Voice Sahayak</p>
-            <p className="text-[10px] text-mint-100 font-medium">తెలుగు • Hindi • English • मराठी</p>
           </div>
         </button>
       )}

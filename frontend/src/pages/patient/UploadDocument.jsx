@@ -32,7 +32,8 @@ import {
   FaExclamationTriangle,
   FaNotesMedical,
   FaMicroscope,
-  FaChartBar
+  FaChartBar,
+  FaCamera
 } from 'react-icons/fa';
 
 const UploadDocument = () => {

@@ -37,10 +37,18 @@ export const AuthProvider = ({ children }) => {
       try {
         const profileRes = await api.get('/api/auth/profile/');
         if (profileRes.data) {
+          const resData = profileRes.data;
+          const pFullName = resData.full_name || 
+            (resData.first_name ? `${resData.first_name} ${resData.last_name || ''}`.trim() : null);
+
           userInfo = {
             ...userInfo,
-            ...profileRes.data,
-            name: profileRes.data.full_name || profileRes.data.user || userInfo.name,
+            ...resData,
+            name: (pFullName && typeof pFullName === 'string' && isNaN(Number(pFullName)) && pFullName.trim() !== '')
+                  ? pFullName
+                  : (credentials.username && isNaN(Number(credentials.username))
+                      ? credentials.username.charAt(0).toUpperCase() + credentials.username.slice(1)
+                      : userInfo.name),
           };
         }
       } catch (pErr) {

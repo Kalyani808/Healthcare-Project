@@ -169,7 +169,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
-    @action(detail=True, methods=['get'], url_path='audio')
+    @action(detail=True, methods=['get'], url_path='audio', authentication_classes=[], permission_classes=[permissions.AllowAny])
     def get_document_audio(self, request, pk=None):
         """
         Stream high-quality native MP3 audio for the prescription or lab report in Telugu, Hindi, Marathi, or English.
@@ -204,7 +204,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         audio_bytes = generate_audio_for_text(script_text, lang=lang)
         return HttpResponse(audio_bytes, content_type="audio/mpeg")
 
-    @action(detail=False, methods=['get', 'post'], url_path='speak', permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['get', 'post'], url_path='speak', authentication_classes=[], permission_classes=[permissions.AllowAny])
     def speak_text(self, request):
         """
         Stream high-quality native MP3 audio for arbitrary text in Telugu, Hindi, Marathi, or English.

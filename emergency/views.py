@@ -21,6 +21,43 @@ class EmergencyFacilityViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     queryset = EmergencyFacility.objects.all()
 
+    @action(detail=False, methods=['get'], url_path='live-nearby')
+    def live_nearby(self, request):
+        """
+        GET /api/emergency/facilities/live-nearby/?lat=17.385&lng=78.4867&type=all
+        Fetches REAL, live nearby hospitals, pharmacies, and blood banks based on GPS coordinates.
+        """
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        facility_type = request.query_params.get('type', 'all')
+
+        if not lat or not lng:
+            return Response(
+                {'error': 'Latitude and Longitude are required to fetch live nearby facilities.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.live_facilities_service import LiveFacilitiesService
+        try:
+            facilities = LiveFacilitiesService.fetch_live_nearby(
+                lat=lat,
+                lng=lng,
+                facility_type=facility_type
+            )
+            return Response({
+                'status': 'success',
+                'latitude': float(lat),
+                'longitude': float(lng),
+                'facility_type': facility_type,
+                'count': len(facilities),
+                'facilities': facilities
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to fetch live facilities: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=['get'], url_path='nearby')
     def nearby(self, request):
         city = request.query_params.get('city', 'Hyderabad')

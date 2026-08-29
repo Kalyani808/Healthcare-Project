@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api/axios';
+import MarkdownMessage from './MarkdownMessage';
 import { 
   FaRobot, 
   FaPaperPlane, 
@@ -413,7 +414,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
                           : 'bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700/80 rounded-tl-none shadow-sm'
                       }`}
                     >
-                      <p>{msg.text}</p>
+                      <MarkdownMessage content={msg.text} />
                       
                       <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/50">
                         <span className={`text-[9px] ${msg.sender === 'user' ? 'text-health-100' : 'text-slate-400'}`}>

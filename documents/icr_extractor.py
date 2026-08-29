@@ -12,9 +12,13 @@ def get_ocr_reader():
     """Lazy load EasyOCR reader once to save memory and warm up model."""
     global _OCR_READER
     if _OCR_READER is None:
-        import easyocr
-        # Initialize EasyOCR reader with verbose=False to prevent Windows stdout encoding issues
-        _OCR_READER = easyocr.Reader(['en'], gpu=False, verbose=False)
+        try:
+            import easyocr
+            # Initialize EasyOCR reader with verbose=False to prevent Windows stdout encoding issues
+            _OCR_READER = easyocr.Reader(['en'], gpu=False, verbose=False)
+        except (ImportError, Exception) as e:
+            print(f"[OCR IMPORT WARNING] EasyOCR load failed or blocked by policy: {str(e)}")
+            _OCR_READER = None
     return _OCR_READER
 
 def preprocess_image(image_input):
@@ -175,7 +179,12 @@ class PrescriptionICR:
     """Intelligent Character Recognition engine for handwritten and printed prescriptions."""
 
     def __init__(self):
-        self.reader = get_ocr_reader()
+        self.reader = None
+
+    def get_reader(self):
+        if self.reader is None:
+            self.reader = get_ocr_reader()
+        return self.reader
 
     def preprocess_image(self, image_path):
         return preprocess_image(image_path)
@@ -248,7 +257,7 @@ class PrescriptionICR:
                         "max_tokens": 800,
                         "response_format": {"type": "json_object"}
                     },
-                    timeout=3.0
+                    timeout=30.0
                 )
 
                 if resp.status_code == 200:
@@ -300,7 +309,10 @@ class PrescriptionICR:
 
         # Step 5: Fast OCR Pass
         t_ocr_start = time.time()
-        pass1 = self.reader.readtext(var_clahe, batch_size=4, paragraph=False)
+        reader = self.get_reader()
+        if not reader:
+            raise RuntimeError("EasyOCR is unavailable due to local DLL load restrictions or import failures (bidi/easyocr blocked).")
+        pass1 = reader.readtext(var_clahe, batch_size=4, paragraph=False)
         print(f"Fast EasyOCR pass completed in {round(time.time() - t_ocr_start, 2)}s! Found {len(pass1)} lines.")
 
         combined_lines = []

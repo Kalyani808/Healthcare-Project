@@ -123,6 +123,7 @@ class MedicationScheduleViewSet(viewsets.ModelViewSet):
         Body: { "document_id": 53, "medicines": [...] }
         1-Click converts extracted prescription medicines to active daily schedules.
         """
+        import re
         doc_id = request.data.get('document_id')
         medicines = request.data.get('medicines', [])
 
@@ -136,40 +137,94 @@ class MedicationScheduleViewSet(viewsets.ModelViewSet):
         created_schedules = []
         today = timezone.localdate()
 
+        def parse_duration_days(duration_val):
+            if not duration_val:
+                return 7
+            if isinstance(duration_val, int):
+                return duration_val
+            dur_str = str(duration_val).lower().strip()
+            num_match = re.search(r'\d+', dur_str)
+            num = int(num_match.group()) if num_match else 7
+            if 'month' in dur_str:
+                return num * 30
+            elif 'week' in dur_str:
+                return num * 7
+            return num if num > 0 else 7
+
         for med in medicines:
             name = med.get('name') or med.get('medicine')
             if not name:
                 continue
 
             dosage = med.get('dosage') or med.get('strength') or '1 tablet'
-            freq = med.get('frequency') or '1-0-1'
+            freq = med.get('frequency') or med.get('dosage') or '1-0-1'
             timing = med.get('timing') or 'after meal'
+            duration_days = parse_duration_days(med.get('duration'))
 
-            # Parse frequency (1-0-1 -> morning + night, 1-0-0 -> morning, 0-0-1 -> night, 1-1-1 -> all 3)
-            is_m = '1' in freq.split('-')[0] if '-' in freq else True
-            is_a = '1' in freq.split('-')[1] if '-' in freq and len(freq.split('-')) > 1 else False
-            is_n = '1' in freq.split('-')[2] if '-' in freq and len(freq.split('-')) > 2 else ('night' in freq.lower() or 'hs' in freq.lower() or not is_a)
+            # Parse frequency slots accurately
+            freq_clean = str(freq).lower().strip()
+            is_m, is_a, is_n = False, False, False
+
+            if '-' in freq_clean:
+                parts = freq_clean.split('-')
+                is_m = int(parts[0]) > 0 if len(parts) > 0 and parts[0].isdigit() else False
+                is_a = int(parts[1]) > 0 if len(parts) > 1 and parts[1].isdigit() else False
+                is_n = int(parts[2]) > 0 if len(parts) > 2 and parts[2].isdigit() else False
+            elif any(k in freq_clean for k in ['tds', 'thrice', 'tid', '3 times', 'three']):
+                is_m, is_a, is_n = True, True, True
+            elif any(k in freq_clean for k in ['bd', 'twice', 'bid', '2 times', 'two']):
+                is_m, is_a, is_n = True, False, True
+            elif any(k in freq_clean for k in ['hs', 'night', 'bedtime', '0-0-1']):
+                is_m, is_a, is_n = False, False, True
+            elif any(k in freq_clean for k in ['afternoon', 'lunch', '0-1-0']):
+                is_m, is_a, is_n = False, True, False
+            elif any(k in freq_clean for k in ['od', 'once', 'morning', 'qd', '1-0-0']):
+                is_m, is_a, is_n = True, False, False
+
+            if not is_m and not is_a and not is_n:
+                is_m, is_n = True, True
 
             food_timing = 'before_meal' if 'before' in timing.lower() else 'after_meal'
             usage_info = med.get('usage') or MedicineInfoService.get_medicine_usage(name, 'en')
 
-            schedule = MedicationSchedule.objects.create(
+            # Update existing active schedule or create new
+            schedule, created = MedicationSchedule.objects.update_or_create(
                 user=request.user,
                 medicine_name=name.capitalize(),
-                dosage=dosage,
-                frequency=freq,
-                is_morning=is_m,
-                is_afternoon=is_a,
-                is_night=is_n,
-                food_timing=food_timing,
-                duration_days=5,
-                start_date=today,
-                end_date=today + datetime.timedelta(days=5),
-                category=med.get('category') or 'Prescribed Medication',
-                usage_summary=usage_info,
-                instructions=med.get('instructions') or f"Take {dosage} {food_timing.replace('_', ' ')}",
-                source_document=source_doc
+                is_active=True,
+                defaults={
+                    'dosage': dosage,
+                    'frequency': freq,
+                    'is_morning': is_m,
+                    'is_afternoon': is_a,
+                    'is_night': is_n,
+                    'food_timing': food_timing,
+                    'duration_days': duration_days,
+                    'start_date': today,
+                    'end_date': today + datetime.timedelta(days=duration_days),
+                    'category': med.get('category') or 'PRESCRIBED MEDICATION',
+                    'usage_summary': usage_info,
+                    'instructions': med.get('instructions') or f"Take {dosage} {food_timing.replace('_', ' ')}",
+                    'source_document': source_doc
+                }
             )
+
+            # Auto-initialize today's logs for all active slots
+            slot_checks = [
+                ('morning', schedule.is_morning, schedule.morning_time),
+                ('afternoon', schedule.is_afternoon, schedule.afternoon_time),
+                ('night', schedule.is_night, schedule.night_time)
+            ]
+            for slot_key, is_slot_active, slot_time in slot_checks:
+                if is_slot_active:
+                    MedicationLog.objects.get_or_create(
+                        schedule=schedule,
+                        user=request.user,
+                        date=today,
+                        slot=slot_key,
+                        defaults={'scheduled_time': slot_time, 'status': 'pending'}
+                    )
+
             created_schedules.append(MedicationScheduleSerializer(schedule).data)
 
         return Response({
@@ -210,12 +265,31 @@ class MedicationScheduleViewSet(viewsets.ModelViewSet):
                 'rate': round((d_taken / d_total * 100)) if d_total > 0 else 100
             })
 
+        # Calculate actual consecutive streak days
+        streak = 0
+        today_taken = logs.filter(date=today, status='taken').exists()
+        if today_taken:
+            streak += 1
+
+        check_day = today - datetime.timedelta(days=1)
+        while check_day >= today - datetime.timedelta(days=30):
+            day_logs = MedicationLog.objects.filter(user=request.user, date=check_day)
+            if not day_logs.exists():
+                break
+            d_total = day_logs.count()
+            d_taken = day_logs.filter(status='taken').count()
+            if d_total > 0 and (d_taken / d_total) >= 0.5:
+                streak += 1
+                check_day -= datetime.timedelta(days=1)
+            else:
+                break
+
         return Response({
             'adherence_pct': adherence_pct,
             'total_doses': total_logs,
             'taken_doses': taken_logs,
             'missed_doses': missed_logs,
-            'streak_days': 5 if adherence_pct >= 80 else 2,
+            'streak_days': max(streak, 1 if total_logs > 0 else 0),
             'daily_breakdown': daily_breakdown
         })
 

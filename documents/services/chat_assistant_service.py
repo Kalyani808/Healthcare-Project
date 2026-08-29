@@ -51,7 +51,7 @@ TABLET_KNOWLEDGE_BASE = {
         "precautions_mr": "गोळी चावू नका. तेलकट आणि तिखट पदार्थ पूर्णपणे टाळा."
     },
     "dolo 650": {
-        "aliases": ["dolo", "dolo 650", "dolo650", "paracetamol", "calpol", "crocin", "డోలో", "డోలో 650", "डोलो", "डोलो 650"],
+        "aliases": ["dolo", "dolo 650", "dolo650", "dolopar", "dolopar 650", "paracetamol", "calpol", "crocin", "డోలో", "డోలో 650", "डोलो", "डोलो 650"],
         "generic": "Paracetamol (650mg)",
         "category": "Analgesic & Antipyretic",
         "purpose": "Quickly reduces high fever, body pain, headache, and viral symptoms.",
@@ -154,21 +154,118 @@ ROLE & CAPABILITIES:
   4. What to do if they miss a dose.
 
 CRITICAL GUARDRAILS:
-- Always respond in the EXACT same language as the user query (Telugu in Telugu, Hindi in Hindi, etc.).
+- Always respond in the user's selected language: if lang is 'en' or query is in English, reply in English; if lang is 'te' or Telugu query, reply in Telugu (తెలుగు); if lang is 'hi' or Hindi query, reply in Hindi (हिंदी); if lang is 'mr' or Marathi query, reply in Marathi (मराठी).
 - Never change the dosage or cancel a doctor's prescribed medicine.
 - Remind patients to consult their doctor or visit the nearest Primary Health Center (PHC) if severe symptoms occur."""
 
 class AIChatService:
 
     @classmethod
+    def match_prescription_medicine(cls, query_text, prescription_context, lang="en"):
+        """
+        Check if user's question references a medicine from their active prescription context.
+        Matches with word-boundary and OCR typo tolerance (e.g. 'nodolon' matches 'Tab Nodalon').
+        """
+        if not prescription_context or not query_text:
+            return None
+
+        # Extract list of medicines from context
+        med_list = []
+        if isinstance(prescription_context, dict):
+            med_list = prescription_context.get("active_medicines") or prescription_context.get("medicines") or []
+        elif isinstance(prescription_context, list):
+            med_list = prescription_context
+
+        if not med_list:
+            return None
+
+        q_lower = query_text.lower()
+        from .medicine_info_service import MedicineInfoService
+
+        for med in med_list:
+            raw_name = med.get("name") or med.get("medicine") or ""
+            if not raw_name:
+                continue
+
+            # Clean name (remove Tab, Cap, Syrup, strengths)
+            clean_name = re.sub(r'^(tab|cap|syp|inj|tablet|capsule)\.?\s*', '', raw_name, flags=re.IGNORECASE)
+            clean_name = re.sub(r'\s*\d+(\.\d+)?\s*(mg|ml|gm|mcg|iu|au|duo|dsr)?.*$', '', clean_name, flags=re.IGNORECASE).strip()
+            
+            if not clean_name or len(clean_name) < 3:
+                clean_name = raw_name.strip()
+
+            c_lower = clean_name.lower()
+
+            # 1. Exact word boundary match
+            matched = bool(re.search(rf"\b{re.escape(c_lower)}\b", q_lower))
+
+            # 2. Fuzzy / typo match (e.g. nodolon vs nodalon, ranbite vs ranbity)
+            if not matched and len(c_lower) >= 4:
+                stem = c_lower[:4]
+                if stem in q_lower:
+                    matched = True
+
+            if matched:
+                dosage = med.get("dosage") or med.get("strength") or "1 tablet"
+                timing = med.get("timing") or "after meals"
+                freq = med.get("frequency") or "as directed"
+                instructions = med.get("instructions") or med.get("usage") or ""
+
+                # Fetch clinical purpose
+                usage_info = instructions or MedicineInfoService.get_medicine_usage(clean_name, lang=lang)
+
+                if lang in ["te", "telugu"]:
+                    return (
+                        f"💊 **మీ ప్రిస్క్రిప్షన్‌లోని మందు: {raw_name.upper()} ({dosage})**\n\n"
+                        f"🎯 **ఉపయోగం / కారణం:** {usage_info}\n"
+                        f"⏰ **తీసుకునే సమయం & విధానం:** {timing} ({freq})\n"
+                        f"🛡️ **సలహా:** డాక్టర్ సూచించిన మోతాదు ప్రకారం మాత్రమే మందును సమయానికి వేసుకోండి.\n\n"
+                        f"⚠️ *గమనిక: మీ ప్రిస్క్రిప్షన్ ఆధారంగా ఈ సమాచారం ఇవ్వబడింది.*"
+                    )
+                elif lang in ["hi", "hindi"]:
+                    return (
+                        f"💊 **आपके पर्चे की दवा: {raw_name.upper()} ({dosage})**\n\n"
+                        f"🎯 **दवा का उपयोग:** {usage_info}\n"
+                        f"⏰ **लेने का सही समय और नियम:** {timing} ({freq})\n"
+                        f"🛡️ **सलाह:** डॉक्टर के बताए अनुसार ही नियमित समय पर खुराक लें।\n\n"
+                        f"⚠️ *नोट: यह जानकारी आपके अपलोड किए गए पर्चे के आधार पर दी गई है।*"
+                    )
+                elif lang in ["mr", "marathi"]:
+                    return (
+                        f"💊 **तुमच्या प्रिस्क्रिप्शनमधील औषध: {raw_name.upper()} ({dosage})**\n\n"
+                        f"🎯 **औषधाचा वापर:** {usage_info}\n"
+                        f"⏰ **घेण्याची वेळ व पद्धत:** {timing} ({freq})\n"
+                        f"🛡️ **काळजी:** डॉक्टरांनी दिलेल्या सल्ल्यानुसार नियमित वेळेवर औषध घ्यावे.\n\n"
+                        f"⚠️ *टीप: ही माहिती तुमच्या प्रिस्क्रिप्शननुसार दिली आहे.*"
+                    )
+                else:
+                    return (
+                        f"💊 **Prescription Medication: {raw_name.upper()} ({dosage})**\n\n"
+                        f"🎯 **Clinical Purpose:** {usage_info}\n"
+                        f"⏰ **Prescribed Timing & Schedule:** {timing} ({freq})\n"
+                        f"🛡️ **Guidance:** Take this dose strictly as instructed on your prescription.\n\n"
+                        f"⚠️ *Note: Sourced directly from your uploaded prescription.*"
+                    )
+
+        return None
+
+    @classmethod
     def match_tablet_knowledge(cls, query_text, lang="en"):
-        """Look up in-memory pharmacology knowledge base with aliases for instant offline matching."""
+        """Look up in-memory pharmacology knowledge base with exact word-boundary alias matching."""
         q_lower = query_text.lower()
         matched = []
 
         for key, data in TABLET_KNOWLEDGE_BASE.items():
             aliases = data.get("aliases", [key])
-            if any(alias in q_lower for alias in aliases) or data['generic'].lower() in q_lower:
+            matched_alias = False
+            for alias in aliases:
+                # Use strict word boundary so 'nodolon' will never match 'dolo'
+                pattern = rf"\b{re.escape(alias.lower())}\b"
+                if re.search(pattern, q_lower):
+                    matched_alias = True
+                    break
+            
+            if matched_alias or re.search(rf"\b{re.escape(data['generic'].lower())}\b", q_lower):
                 matched.append((key, data))
                 break
 
@@ -215,7 +312,22 @@ class AIChatService:
         start_t = time.time()
         last_msg = messages_history[-1].get("text", "") if messages_history else ""
 
-        # 1. Fast Path: In-Memory Clinical Pharmacology Lookup for specific tablets
+        if not last_msg.strip():
+            return {"status": "error", "response": "Please ask a question about your medicines or health.", "duration": 0}
+
+        # 1. First Priority: Match against patient's active prescription medications
+        rx_match = cls.match_prescription_medicine(last_msg, prescription_context, lang=lang)
+        if rx_match:
+            elapsed = round(time.time() - start_t, 2)
+            return {
+                "status": "success",
+                "response": rx_match,
+                "model": "prescription-context-matcher",
+                "duration": elapsed,
+                "is_prescription_match": True
+            }
+
+        # 2. Second Priority: In-Memory Clinical Pharmacology Knowledge Base with strict word-boundaries
         tablet_match = cls.match_tablet_knowledge(last_msg, lang=lang)
         if tablet_match:
             elapsed = round(time.time() - start_t, 2)
@@ -227,14 +339,14 @@ class AIChatService:
                 "is_pharmacology_match": True
             }
 
-        # 2. Build Context Prompt with Prescriptions if available
+        # 3. Build Context Prompt with Prescriptions if available
         context_str = ""
         if prescription_context:
             context_str += f"\n\nPATIENT'S ACTIVE PRESCRIPTION CONTEXT:\n{json.dumps(prescription_context, indent=2)}"
 
-        custom_system_prompt = SYSTEM_PROMPT + context_str
+        custom_system_prompt = SYSTEM_PROMPT + context_str + f"\n\nIMPORTANT: Answer the patient's CURRENT question specifically: '{last_msg}'."
 
-        # 3. Cloud OpenRouter LLM fast path if enabled
+        # 4. Cloud OpenRouter LLM fast path if enabled
         if PREFER_CLOUD_OCR and OPENROUTER_API_KEY:
             try:
                 formatted_msgs = [{"role": "system", "content": custom_system_prompt}]
@@ -268,7 +380,7 @@ class AIChatService:
             except Exception as e:
                 logger.warning(f"[CHAT OPENROUTER WARN] Cloud chat failed, falling back to local: {e}")
 
-        # 4. Local Ollama Mistral LLM
+        # 5. Local Ollama Mistral LLM
         url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
         formatted_messages = [{"role": "system", "content": custom_system_prompt}]
         for msg in messages_history[-6:]:
@@ -300,9 +412,9 @@ class AIChatService:
         except Exception as e:
             logger.error(f"[AI CHAT ERROR] Local Ollama call failed: {str(e)}")
 
-        # 5. Smart Clinical Offline Fallback with Tablet Guidance
+        # 6. Smart Clinical Offline Fallback with Tablet Guidance
         if lang in ["te", "telugu"]:
-            fallback = "మీ ప్రిస్క్రిప్షన్‌లోని మందులను డాక్టర్ సూచించిన వేళలకు వేసుకోవాలి. యాంటీబయాటిక్స్ వేసుకున్నప్పుడు పెరుగు లేదా మజ్జిగ తీసుకోండి, అసిడిటీ మందులను ఉదయం ఖాళీ కడుపుతో వేసుకోండి. ఏవైనా తీవ్రమైన నొప్పులు ఉంటే వెంటనే డాక్టర్‌ను సంప్రదించండి."
+            fallback = "మీ ప్రిస్క్రిప్షన్‌లోని మందులను డాక్టర్ సూచించిన వేళలకు వేసుకోవాలి. యాంటీబయాటిక్స్ వేసుకున్నప్పుడు పెరుగు లేదా మజ్జిగ తీసుకోండి, అసిడిటీ మందులను ఉదయం ఖाళీ కడుపుతో వేసుకోండి. ఏవైనా తీవ్రమైన నొప్పులు ఉంటే వెంటనే డాక్టర్‌ను సంప్రదించండి."
         elif lang in ["hi", "hindi"]:
             fallback = "अपनी दवाइयों को डॉक्टर के बताए समय पर ही लें। एंटीबायोटिक के साथ दही या छाछ पिएं और गैस/एसिडिटी की दवा सुबह खाली पेट लें। किसी भी गंभीर तकलीफ में तुरंत नजदीकी डॉक्टर से परामर्श लें।"
         elif lang in ["mr", "marathi"]:

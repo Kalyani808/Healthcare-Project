@@ -235,7 +235,7 @@ const MedicationReminders = () => {
               {todayData ? `${todayData.taken_doses} of ${todayData.total_doses} Doses` : '0 / 0'}
             </h3>
             <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              ✓ {adherence?.streak_days || 5} Day Streak Maintained
+              {adherence?.streak_days ? `✓ ${adherence.streak_days} Day Streak Active` : 'Log doses to start your streak'}
             </p>
           </div>
         </Card>
@@ -541,7 +541,25 @@ const MedicationReminders = () => {
             </div>
 
             {schedules.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-8">No medication schedules found. Upload a prescription or click "Add Medicine".</p>
+              <div className="py-12 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-tealSoft-50 dark:bg-slate-800 text-tealSoft-600 dark:text-tealSoft-400 flex items-center justify-center text-2xl mx-auto shadow-inner">
+                  <FaPills />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">No medicines added yet</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Extract a prescription and tap <strong className="text-tealSoft-600">Set Reminder</strong> to add one, or click Add Medicine.
+                  </p>
+                </div>
+                <div className="pt-1">
+                  <a
+                    href="/patient/upload-document"
+                    className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-tealSoft-600 hover:bg-tealSoft-700 text-white text-xs font-bold shadow-xs transition-all"
+                  >
+                    Upload Prescription →
+                  </a>
+                </div>
+              </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {schedules.map((s) => (

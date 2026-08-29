@@ -3,6 +3,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import CameraCaptureModal from '../../components/common/CameraCaptureModal';
+import MarkdownMessage from '../../components/common/MarkdownMessage';
 import api from '../../api/axios';
 import { 
   FaRobot, 
@@ -477,7 +478,7 @@ const AIChatAssistant = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-200/60 dark:border-slate-700 shadow-xs'
                   }`}
                 >
-                  {msg.text}
+                  <MarkdownMessage content={msg.text} />
                 </div>
 
                 {/* Audio Read Aloud Button on AI Messages */}

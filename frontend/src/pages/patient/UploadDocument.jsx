@@ -7,6 +7,15 @@ import CameraCaptureModal from '../../components/common/CameraCaptureModal';
 import api from '../../api/axios';
 import { parseDosagePattern } from '../../utils/dosageFormatter';
 import {
+  getLocalizedUiString,
+  getLocalizedMedicinePurpose,
+  getLocalizedSideEffects,
+  getLocalizedScheduleSummary,
+  getLocalizedRuralGuidance,
+  getLocalizedSlotPillLabels,
+  normalizeLangKey
+} from '../../utils/prescriptionLocalization';
+import {
   FaFileUpload,
   FaCloudUploadAlt,
   FaRobot,
@@ -32,7 +41,8 @@ import {
   FaExclamationTriangle,
   FaNotesMedical,
   FaMicroscope,
-  FaChartBar
+  FaChartBar,
+  FaCamera
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
@@ -48,6 +58,7 @@ const UploadDocument = () => {
   const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
   const [syncingReminders, setSyncingReminders] = useState(false);
   const [syncedCount, setSyncedCount] = useState(null);
+  const [savedRemindersMap, setSavedRemindersMap] = useState({});
 
   // Active View Mode (Auto-detected from OCR or toggled by user)
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'audio_transcript', 'raw_ocr'
@@ -112,7 +123,14 @@ const UploadDocument = () => {
         document_id: activeDocId,
         medicines: analyzed.medicines
       });
-      setSyncedCount(res.data?.imported_count || analyzed.medicines.length);
+      const count = res.data?.imported_count || analyzed.medicines.length;
+      setSyncedCount(count);
+      const allSaved = {};
+      analyzed.medicines.forEach((m, i) => {
+        const k = m.name || m.medicine || `med_${i}`;
+        allSaved[k] = true;
+      });
+      setSavedRemindersMap(allSaved);
     } catch (err) {
       console.error('Sync to reminders error:', err);
     } finally {
@@ -133,31 +151,41 @@ const UploadDocument = () => {
     return analyzed.audio_script || '';
   };
 
-  // Play audio instructions via native backend MP3 streaming or browser speech fallback
-  const speakAudioScript = () => {
+  // Helper: Asynchronously load browser voices waiting for voiceschanged event
+  const getBrowserVoicesAsync = () => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) return resolve([]);
+      const current = window.speechSynthesis.getVoices();
+      if (current && current.length > 0) return resolve(current);
+
+      const handler = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler);
+        resolve(window.speechSynthesis.getVoices() || []);
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', handler);
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler);
+        resolve(window.speechSynthesis.getVoices() || []);
+      }, 1000);
+    });
+  };
+
+  // Play audio instructions via high-quality native backend MP3 streaming or browser speech fallback
+  const speakAudioScript = async () => {
     const textToSpeak = getAudioScriptForSelectedLang();
     if (!textToSpeak) return;
 
-    if (audioPlayerRef.current) {
-      audioPlayerRef.current.pause();
-      audioPlayerRef.current = null;
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    handleStopAudio();
+    setIsPlayingAudio(true);
+    setIsPausedAudio(false);
 
     const langCode = audioLang.startsWith('te') ? 'te' :
                      audioLang.startsWith('hi') ? 'hi' :
                      audioLang.startsWith('mr') ? 'mr' : 'en';
 
     try {
-      let audioUrl = '';
-      if (activeDocId) {
-        audioUrl = `/api/documents/${activeDocId}/audio/?lang=${langCode}&t=${Date.now()}`;
-      } else {
-        audioUrl = `/api/documents/speak/?lang=${langCode}&text=${encodeURIComponent(textToSpeak)}`;
-      }
-
+      // 1. Primary: Stream Google female voice MP3 from backend
+      const audioUrl = `/api/documents/speak/?lang=${langCode}&text=${encodeURIComponent(textToSpeak)}&t=${Date.now()}`;
       const audio = new Audio(audioUrl);
       audioPlayerRef.current = audio;
 
@@ -170,31 +198,55 @@ const UploadDocument = () => {
         setIsPausedAudio(false);
         audioPlayerRef.current = null;
       };
-      audio.onerror = () => {
-        console.warn('Falling back to browser speech synthesis');
-        fallbackBrowserSpeech(textToSpeak, audioLang);
+      audio.onerror = async (err) => {
+        console.warn('Backend audio streaming error, falling back to Web Speech API:', err);
+        await fallbackBrowserSpeech(textToSpeak, audioLang);
       };
 
-      audio.play().catch(() => {
-        fallbackBrowserSpeech(textToSpeak, audioLang);
-      });
+      await audio.play();
     } catch (streamErr) {
-      console.warn('Audio stream error:', streamErr);
-      fallbackBrowserSpeech(textToSpeak, audioLang);
+      console.warn('Audio play exception, switching to browser speech:', streamErr);
+      await fallbackBrowserSpeech(textToSpeak, audioLang);
     }
   };
 
-  const fallbackBrowserSpeech = (textToSpeak, langCode) => {
-    if (!('speechSynthesis' in window)) return;
+  const fallbackBrowserSpeech = async (textToSpeak, langCode) => {
+    if (!('speechSynthesis' in window)) {
+      setInlineError('Speech playback is not supported on this device.');
+      setIsPlayingAudio(false);
+      return;
+    }
     window.speechSynthesis.cancel();
+
+    // Await full voice population to eliminate the race condition
+    const voices = await getBrowserVoicesAsync();
+    const baseCode = (langCode || '').split('-')[0].toLowerCase();
+    const matchedVoices = voices.filter(v => 
+      v.lang.toLowerCase() === (langCode || '').toLowerCase() || 
+      v.lang.toLowerCase().startsWith(baseCode)
+    );
+
+    // If client browser lacks regional voice, inform user cleanly
+    if (matchedVoices.length === 0 && (baseCode === 'te' || baseCode === 'mr')) {
+      const langName = baseCode === 'te' ? 'Telugu' : 'Marathi';
+      setInlineError(`Voice playback for ${langName} requires an active internet connection. Please verify connection and retry.`);
+      setIsPlayingAudio(false);
+      return;
+    }
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = langCode;
-    utterance.rate = 0.90;
+    utterance.rate = 0.88;
+    utterance.pitch = 1.05; // Natural female pitch
 
-    const voices = window.speechSynthesis.getVoices();
-    const matchedVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.split('-')[0]));
-    if (matchedVoice) utterance.voice = matchedVoice;
+    // Prioritize female voice profiles
+    const femaleVoice = matchedVoices.find(v => 
+      /female|heera|swara|kalpana|zira|sangeeta|veena|priya|google/i.test(v.name)
+    ) || matchedVoices[0];
+
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+    }
 
     utterance.onstart = () => {
       setIsPlayingAudio(true);
@@ -204,7 +256,8 @@ const UploadDocument = () => {
       setIsPlayingAudio(false);
       setIsPausedAudio(false);
     };
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      console.error('SpeechSynthesis error:', e);
       setIsPlayingAudio(false);
       setIsPausedAudio(false);
     };
@@ -576,10 +629,10 @@ const UploadDocument = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
                     <FaHeadphones className="text-teal-600" />
-                    <span>Spoken Voice Guidance Sahayak</span>
+                    <span>{getLocalizedUiString('voiceGuidance', audioLang)}</span>
                   </span>
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 rounded-md">
-                    {preferredLang.toUpperCase()} Voice
+                    {normalizeLangKey(audioLang).toUpperCase()} Female Voice
                   </span>
                 </div>
 
@@ -591,7 +644,7 @@ const UploadDocument = () => {
                         onClick={speakAudioScript}
                         className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
                       >
-                        <FaPlay className="text-[10px]" /> <span>Listen Audio</span>
+                        <FaPlay className="text-[10px]" /> <span>{getLocalizedUiString('listenAudio', audioLang)}</span>
                       </button>
                     ) : isPausedAudio ? (
                       <button
@@ -599,7 +652,7 @@ const UploadDocument = () => {
                         onClick={handleResumeAudio}
                         className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
                       >
-                        <FaPlay className="text-[10px]" /> <span>Resume</span>
+                        <FaPlay className="text-[10px]" /> <span>{getLocalizedUiString('resume', audioLang)}</span>
                       </button>
                     ) : (
                       <button
@@ -607,7 +660,7 @@ const UploadDocument = () => {
                         onClick={handlePauseAudio}
                         className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
                       >
-                        <FaPause className="text-[10px]" /> <span>Pause</span>
+                        <FaPause className="text-[10px]" /> <span>{getLocalizedUiString('pause', audioLang)}</span>
                       </button>
                     )}
 
@@ -624,7 +677,7 @@ const UploadDocument = () => {
 
                   <span className="text-[11px] font-bold text-teal-700 dark:text-teal-300 flex items-center space-x-1">
                     <span className={`w-2 h-2 rounded-full ${isPlayingAudio ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
-                    <span>{isPlayingAudio ? 'Speaking...' : 'Ready'}</span>
+                    <span>{isPlayingAudio ? getLocalizedUiString('speaking', audioLang) : getLocalizedUiString('ready', audioLang)}</span>
                   </span>
                 </div>
               </div>
@@ -648,7 +701,7 @@ const UploadDocument = () => {
                   }`}
                 >
                   <FaNotesMedical />
-                  <span>Clinical Findings</span>
+                  <span>{getLocalizedUiString('clinicalFindings', audioLang)}</span>
                 </button>
 
                 <button
@@ -660,7 +713,7 @@ const UploadDocument = () => {
                   }`}
                 >
                   <FaVolumeUp />
-                  <span>Audio Transcript</span>
+                  <span>{getLocalizedUiString('audioTranscript', audioLang)}</span>
                 </button>
 
                 <button
@@ -672,7 +725,7 @@ const UploadDocument = () => {
                   }`}
                 >
                   <FaTable />
-                  <span>Raw OCR</span>
+                  <span>{getLocalizedUiString('rawOcr', audioLang)}</span>
                 </button>
               </div>
 
@@ -696,7 +749,7 @@ const UploadDocument = () => {
               <div className="pt-4 space-y-3 flex-1">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                    Spoken Voice Guidance Transcript ({preferredLang.toUpperCase()})
+                    Spoken Voice Guidance Transcript ({normalizeLangKey(audioLang).toUpperCase()})
                   </h4>
                   <button
                     type="button"
@@ -822,44 +875,11 @@ const UploadDocument = () => {
               /* ======================================================== */
               <div className="pt-4 space-y-4 flex-1">
                 
-                {/* 1-Click Sync to Medication Reminders Schedule */}
-                {analyzed.medicines && analyzed.medicines.length > 0 && (
-                  <div className="p-3.5 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-[#1E293B] dark:to-[#172033] border border-teal-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-2 rounded-xl bg-teal-600 text-white text-sm shadow-xs">
-                        <FaClock />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Set Daily Medication Reminders</h4>
-                        <p className="text-[11px] text-slate-500">Auto-create Morning, Afternoon & Night reminder alarms</p>
-                      </div>
-                    </div>
-
-                    {syncedCount === null ? (
-                      <button
-                        type="button"
-                        onClick={handleSyncToReminders}
-                        disabled={syncingReminders}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all whitespace-nowrap"
-                      >
-                        {syncingReminders ? 'Adding...' : '⏰ Set Daily Reminders'}
-                      </button>
-                    ) : (
-                      <a
-                        href="/patient/reminders"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
-                      >
-                        <FaCheckCircle className="text-xs" />
-                        <span>Added {syncedCount} Meds (View Reminders)</span>
-                      </a>
-                    )}
-                  </div>
-                )}
-
                 {/* Detected Medicines List */}
-                <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {analyzed.medicines && analyzed.medicines.length > 0 ? (
                     analyzed.medicines.map((med, idx) => {
+                      const currentLang = normalizeLangKey(audioLang || preferredLang);
                       const dosageInfo = parseDosagePattern(
                         med?.dosage || med?.strength || '',
                         med?.frequency || '',
@@ -867,91 +887,144 @@ const UploadDocument = () => {
                         med?.duration || ''
                       ) || {};
 
-                      const hasSlots = Boolean(
-                        dosageInfo?.hasSlotInfo &&
-                        dosageInfo?.morning &&
-                        dosageInfo?.afternoon &&
-                        dosageInfo?.night
-                      );
+                      const localizedPurpose = getLocalizedMedicinePurpose(med, currentLang);
+                      const localizedSideEffects = getLocalizedSideEffects(med, currentLang);
+                      const localizedScheduleSummary = getLocalizedScheduleSummary(dosageInfo, currentLang);
+                      const localizedRuralGuidance = getLocalizedRuralGuidance(dosageInfo, med, currentLang);
+                      const slotPillLabels = getLocalizedSlotPillLabels(dosageInfo, med, currentLang);
+
+                      // Single medicine reminder action handler
+                      const medKey = med?.name || med?.medicine || `med_${idx}`;
+                      const isReminderSaved = !!savedRemindersMap[medKey];
+
+                      const handleSingleReminder = async (selectedMed) => {
+                        setSyncingReminders(true);
+                        try {
+                          const res = await api.post('/api/reminders/schedules/sync-from-prescription/', {
+                            document_id: activeDocId,
+                            medicines: [selectedMed]
+                          });
+                          setSavedRemindersMap(prev => ({ ...prev, [medKey]: true }));
+                          setSyncedCount((prev) => (prev || 0) + 1);
+                        } catch (err) {
+                          console.error('Single reminder sync error:', err);
+                        } finally {
+                          setSyncingReminders(false);
+                        }
+                      };
 
                       return (
                         <div
                           key={idx}
-                          className="p-4 bg-white dark:bg-[#1E293B] border-l-4 border-teal-500 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-700/60 space-y-3"
+                          className="p-5 bg-[#f8f9fb] dark:bg-[#1E293B]/60 rounded-3xl border border-slate-200/80 dark:border-slate-700/60 space-y-4 text-left animate-fadeIn"
                         >
-                          <div className="flex items-center justify-between font-bold">
-                            <span className="text-slate-900 dark:text-slate-100 font-extrabold text-base">
-                              {med?.medicine || med?.name || 'Prescribed Medicine'}
-                            </span>
-                            <span className="text-xs font-mono px-3 py-0.5 rounded-full bg-teal-100 dark:bg-slate-700 text-teal-800 dark:text-teal-300 font-bold shadow-xs">
-                              {((med?.confidence || 0.95) * 100).toFixed(0)}% match
-                            </span>
-                          </div>
-
-                          {/* 3-Slot Visual Schedule */}
-                          {hasSlots && (
-                            <div className="grid grid-cols-3 gap-2 pt-1">
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold ${
-                                dosageInfo?.morning?.take
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 text-emerald-800 dark:text-emerald-300'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 text-slate-400 opacity-60'
-                              }`}>
-                                <span className="text-[10px] font-bold flex items-center justify-center space-x-1">
-                                  <FaSun className="text-amber-500" /> <span>Morning</span>
-                                </span>
-                                <span className="font-black text-xs mt-0.5 block">
-                                  {dosageInfo?.morning?.take ? `✓ Take (${dosageInfo?.morning?.count || 1})` : '✕ 0 (Skip)'}
-                                </span>
-                              </div>
-
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold ${
-                                dosageInfo?.afternoon?.take
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 text-emerald-800 dark:text-emerald-300'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 text-slate-400 opacity-60'
-                              }`}>
-                                <span className="text-[10px] font-bold flex items-center justify-center space-x-1">
-                                  <FaSun className="text-orange-500" /> <span>Afternoon</span>
-                                </span>
-                                <span className="font-black text-xs mt-0.5 block">
-                                  {dosageInfo?.afternoon?.take ? `✓ Take (${dosageInfo?.afternoon?.count || 1})` : '✕ 0 (Skip)'}
-                                </span>
-                              </div>
-
-                              <div className={`p-2 rounded-xl text-center border text-xs font-semibold ${
-                                dosageInfo?.night?.take
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 text-emerald-800 dark:text-emerald-300'
-                                  : 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 text-slate-400 opacity-60'
-                              }`}>
-                                <span className="text-[10px] font-bold flex items-center justify-center space-x-1">
-                                  <FaMoon className="text-indigo-400" /> <span>Night</span>
-                                </span>
-                                <span className="font-black text-xs mt-0.5 block">
-                                  {dosageInfo?.night?.take ? `✓ Take (${dosageInfo?.night?.count || 1})` : '✕ 0 (Skip)'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Tablet Usage in Preferred Language */}
-                          {(med?.usage || med?.usage_te || med?.usage_hi || med?.usage_mr || med?.info) && (
-                            <div className="p-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900 rounded-xl text-xs space-y-1">
-                              <span className="font-bold text-blue-900 dark:text-blue-300 flex items-center space-x-1">
-                                <span>🎯</span>
-                                <span>
-                                  {preferredLang === 'te' ? 'టాబ్లెట్ ఉపయోగం (Usage / Purpose):' :
-                                   preferredLang === 'hi' ? 'दवा का उपयोग (Usage / Purpose):' :
-                                   preferredLang === 'mr' ? 'औषधाचा वापर (Usage / Purpose):' :
-                                   'Tablet Purpose:'}
+                          {/* Card Header */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center space-x-2.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span className="text-slate-900 dark:text-slate-100 font-extrabold text-base flex items-baseline gap-1">
+                                <span>{med?.medicine || med?.name || getLocalizedUiString('prescribedMedicine', currentLang)}</span>
+                                <span className="text-xs text-slate-400 font-normal">
+                                  ({med?.dosage || med?.strength || getLocalizedUiString('notSpecified', currentLang)})
                                 </span>
                               </span>
-                              <p className="font-medium text-slate-800 dark:text-slate-200 leading-relaxed pl-5 text-xs">
-                                {preferredLang === 'te' ? (med?.usage_te || med?.usage || med?.info) :
-                                 preferredLang === 'hi' ? (med?.usage_hi || med?.usage || med?.info) :
-                                 preferredLang === 'mr' ? (med?.usage_mr || med?.usage || med?.info) :
-                                 (med?.usage || med?.info)}
+                            </div>
+                            
+                            {isReminderSaved ? (
+                              <span className="px-3 py-1 border border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-extrabold rounded-full flex items-center space-x-1.5 shadow-xs">
+                                <span>✓</span>
+                                <span>Reminder Active</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSingleReminder(med)}
+                                className="px-3.5 py-1.5 border border-teal-500/20 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 text-xs font-bold rounded-full flex items-center space-x-1.5 transition-all shadow-xs"
+                              >
+                                <span className="text-[10px]">🔔</span>
+                                <span>{getLocalizedUiString('setReminder', currentLang)}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* One-line schedule summary */}
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-5 mt-[-8px]">
+                            {localizedScheduleSummary}
+                          </p>
+
+                          {/* Inner White Sub-card */}
+                          <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl space-y-3 shadow-xs">
+                            <div className="space-y-0.5">
+                              <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+                                {getLocalizedUiString('whyToTake', currentLang)}
+                              </span>
+                              <p className="text-xs text-slate-800 dark:text-slate-200 font-medium">
+                                {localizedPurpose}
                               </p>
                             </div>
-                          )}
+                            
+                            <div className="space-y-0.5">
+                              <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
+                                {getLocalizedUiString('commonSideEffects', currentLang)}
+                              </span>
+                              <p className="text-xs text-slate-800 dark:text-slate-200 font-medium">
+                                {localizedSideEffects}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Yellow/Amber Rural Guidance Callout Box */}
+                          <div className="p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/60 rounded-2xl space-y-1">
+                            <div className="flex items-center space-x-1.5 text-amber-700 dark:text-amber-400 font-extrabold text-xs">
+                              <span>☀️</span>
+                              <span>{getLocalizedUiString('whenToTake', currentLang)}</span>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                              {localizedRuralGuidance}
+                            </p>
+                          </div>
+
+                          {/* Time Slot Pill Buttons */}
+                          <div className="flex items-center gap-2 pt-1.5 overflow-x-auto">
+                            {/* Morning Slot */}
+                            {dosageInfo?.morning?.take ? (
+                              <div className="px-3.5 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 font-extrabold text-[11px] flex items-center space-x-1.5 shrink-0">
+                                <span>☀️</span>
+                                <span>{slotPillLabels.morningActive}</span>
+                              </div>
+                            ) : (
+                              <div className="px-3.5 py-1.5 rounded-full border border-slate-200/80 bg-slate-100 text-slate-400 font-semibold text-[11px] opacity-60 shrink-0">
+                                <span>☀️</span>
+                                <span>{slotPillLabels.morningInactive}</span>
+                              </div>
+                            )}
+
+                            {/* Afternoon Slot */}
+                            {dosageInfo?.afternoon?.take ? (
+                              <div className="px-3.5 py-1.5 rounded-full border border-orange-300 bg-orange-50 text-orange-700 font-extrabold text-[11px] flex items-center space-x-1.5 shrink-0">
+                                <span>☀️</span>
+                                <span>{slotPillLabels.afternoonActive}</span>
+                              </div>
+                            ) : (
+                              <div className="px-3.5 py-1.5 rounded-full border border-slate-200/80 bg-slate-100 text-slate-400 font-semibold text-[11px] opacity-60 shrink-0">
+                                <span>☀️</span>
+                                <span>{slotPillLabels.afternoonInactive}</span>
+                              </div>
+                            )}
+
+                            {/* Night Slot */}
+                            {dosageInfo?.night?.take ? (
+                              <div className="px-3.5 py-1.5 rounded-full border border-indigo-300 bg-indigo-50/60 text-indigo-700 font-extrabold text-[11px] flex items-center space-x-1.5 shrink-0">
+                                <span>🌙</span>
+                                <span>{slotPillLabels.nightActive}</span>
+                              </div>
+                            ) : (
+                              <div className="px-3.5 py-1.5 rounded-full border border-slate-200/80 bg-slate-100 text-slate-400 font-semibold text-[11px] opacity-60 shrink-0">
+                                <span>🌙</span>
+                                <span>{slotPillLabels.nightInactive}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -961,6 +1034,33 @@ const UploadDocument = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Action Buttons at the bottom of the whole list */}
+                {analyzed.medicines && analyzed.medicines.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        setPreview(null);
+                        setAnalyzed(null);
+                        setSyncedCount(null);
+                        handleStopAudio();
+                      }}
+                      className="py-2.5 border border-teal-600 text-teal-600 bg-white hover:bg-teal-50 text-xs font-bold rounded-full transition-all text-center shadow-xs flex items-center justify-center space-x-1"
+                    >
+                      <span>{getLocalizedUiString('retakePhoto', audioLang)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSyncToReminders}
+                      disabled={syncingReminders}
+                      className="py-2.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-full transition-all text-center shadow-xs flex items-center justify-center space-x-1 disabled:opacity-50"
+                    >
+                      <span>{syncingReminders ? getLocalizedUiString('saving', audioLang) : getLocalizedUiString('confirmSave', audioLang)}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </Card>

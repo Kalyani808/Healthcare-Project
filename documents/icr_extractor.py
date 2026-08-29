@@ -220,7 +220,14 @@ class PrescriptionICR:
                 base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
 
                 vision_prompt = (
-                    "Extract doctor_name, patient_name, clinic, diagnosis, and medicines with name, dosage, frequency, instructions in JSON."
+                    "You are an expert clinical pharmacist and medical prescription OCR AI. "
+                    "Analyze this doctor prescription or laboratory report with high precision. "
+                    "Extract doctor_name, patient_name, clinic, diagnosis, and all prescribed medicines. "
+                    "For each medicine, accurately identify the standard brand or generic name (e.g. Augmentin 625mg, Pan-D, Dolo 650, Chymoral Forte, Ultracet, Metformin, Pan-40), "
+                    "dosage (e.g. 625mg, 40mg, 650mg, 1 tablet), daily frequency (e.g. 1-0-1, 1-0-0, 0-0-1, 1-1-1, Once daily), "
+                    "food timing (e.g. 30 mins before breakfast, After food, Empty stomach), and duration (e.g. for 5 days). "
+                    "Return ONLY JSON: {\"doc_type\": \"prescription\", \"doctor_name\": \"...\", \"patient_name\": \"...\", "
+                    "\"medicines\": [{\"name\": \"...\", \"dosage\": \"...\", \"frequency\": \"...\", \"timing\": \"...\", \"duration\": \"...\"}]}"
                 )
 
                 resp = requests.post(
@@ -243,10 +250,10 @@ class PrescriptionICR:
                                 ]
                             }
                         ],
-                        "max_tokens": 800,
+                        "max_tokens": 1000,
                         "response_format": {"type": "json_object"}
                     },
-                    timeout=12.0
+                    timeout=15.0
                 )
 
                 if resp.status_code == 200:

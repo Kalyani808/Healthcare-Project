@@ -96,6 +96,49 @@ class MistralExtractionService:
             except Exception:
                 pass
 
+        # Check local Ollama Mistral LLM availability
+        ollama_avail, models = self.check_ollama_availability()
+        if ollama_avail and models:
+            try:
+                chosen_model = self.default_model if self.default_model in models else models[0]
+                prompt = (
+                    f"You are an expert medical prescription AI. Extract all prescribed medicines from this OCR text:\n"
+                    f"```\n{raw_ocr_text}\n```\n"
+                    f"Return ONLY JSON: {{\"medicines\": [{{\"name\": \"...\", \"dosage\": \"...\", \"frequency\": \"...\", \"duration\": \"...\", \"timing\": \"...\"}}]}}"
+                )
+                url = f"{self.base_url}/api/generate"
+                payload = json.dumps({"model": chosen_model, "prompt": prompt, "stream": False, "format": "json"}).encode('utf-8')
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode('utf-8'))
+                        response_str = data.get("response", "")
+                        parsed_llm = json.loads(response_str)
+                        llm_meds = parsed_llm.get("medicines", [])
+                        if llm_meds:
+                            structured_meds = []
+                            for item in llm_meds:
+                                mname = item.get("name", "").strip().title()
+                                if mname:
+                                    structured_meds.append({
+                                        "name": mname,
+                                        "medicine": mname,
+                                        "strength": item.get("dosage", ""),
+                                        "dosage": item.get("dosage", ""),
+                                        "frequency": item.get("frequency", "1-0-1"),
+                                        "duration": item.get("duration", "for 5 days"),
+                                        "timing": item.get("timing", "after meal"),
+                                        "confidence": 0.95,
+                                        "confidence_label": "High",
+                                        "verification_warning": "",
+                                        "info": f"Prescribed therapeutic medication ({mname})."
+                                    })
+                            if structured_meds:
+                                print(f"[OLLAMA {chosen_model.upper()} SUCCESS] Extracted {len(structured_meds)} medicines via Ollama LLM")
+                                return structured_meds, f"ollama_{chosen_model}_llm"
+            except Exception as o_err:
+                print(f"[OLLAMA LLM FALLBACK] {o_err}")
+
         # Fast direct precision fuzzy dictionary matcher (< 5 milliseconds)
         medicines, method = extract_all_medicines_structured(raw_ocr_text)
         return medicines, method

@@ -13,9 +13,17 @@ COMPREHENSIVE_MEDICINE_DATABASE = {
         "aliases": ["Aspirin", "Ecosprin", "Disprin", "Delisprin"],
         "benefits": "Blood thinner and pain reliever that reduces inflammation and cardiovascular clot risk."
     },
-    "Aceclofenac": {
-        "aliases": ["Aceclofenac", "Zerodol", "Zerodol-P", "Zerodol-SP", "Hifenac"],
+    "Zerodol-SP": {
+        "aliases": ["Zerodol-SP", "Zerodol SP", "Zerodol", "Aceclofenac", "Zerodol-P", "Hifenac"],
         "benefits": "Relieves acute pain, joint stiffness, and tissue inflammation."
+    },
+    "Chymoral": {
+        "aliases": ["Chymoral", "Chymoral Forte", "Chymoral-AP", "Trypsin Chymotrypsin"],
+        "benefits": "Enzyme medication used to reduce pain, swelling, and tissue inflammation after injury or surgery."
+    },
+    "Pan-40": {
+        "aliases": ["Pan-40", "Pan 40", "Pantoprazole", "Pan-D", "Pantocid", "Pantosec", "Pan-DSR"],
+        "benefits": "Proton pump inhibitor (PPI) that reduces excess stomach acid, GERD, and heartburn."
     },
     "Diclofenac": {
         "aliases": ["Diclofenac", "Voveran", "Voveran-SR", "Reaction"],

@@ -169,7 +169,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
-    @action(detail=True, methods=['get'], url_path='audio')
+    @action(detail=True, methods=['get'], url_path='audio', permission_classes=[permissions.AllowAny])
     def get_document_audio(self, request, pk=None):
         """
         Stream high-quality native MP3 audio for the prescription or lab report in Telugu, Hindi, Marathi, or English.

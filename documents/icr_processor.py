@@ -48,15 +48,18 @@ def get_medicine_info(med_name):
 def normalize_ocr_text(text):
     if not text:
         return ""
-    text = re.sub(r'\b(7ab|1ab|Tal:|7al:|Tali|Tah|Tabi|Teb\.|Tab\.|TL:|Teb|Tab-|Tb:|Tb\.)\b', 'Tab.', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(7ab|1ab|Tal:|7al:|Tali|Tah|Tabi|Teb\.|Tab\.|TL:|Teb|Tab-|Tb:|Tb\.|Tob\.|Tob|TƏB\.|TƏB)\b', 'Tab.', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(Caj|Cop|Caj:|Capi|Cap\.|Cap-)\b', 'Cap.', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(\d+)\s*(09|6583|64603|62509|m3|rn3|n1g|nng|rnp|m9)\b', r'\1 mg', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(\d+(\.\d+)?)\s*(n1l|rn1l)\b', r'\1 ml', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(l-0-l|1-o-1|1-O-1|l-o-l|I-0-1|I-0-I|1-0-I|\[-0-1\])\b', '1-0-1', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(IxSdays?|I-0r|\[~0r|\[~0v|1-0r|1-0v)\b', '1-0-1 for 5 days', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(1-o-0|1-O-0|l-0-0|I-0-0)\b', '1-0-0', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(0-o-1|0-O-1|0-0-l|0-0-I)\b', '0-0-1', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(0\s*-\s*0\s*-\s*1|0\s*-\s*0)\b', '0-0-1', text, flags=re.IGNORECASE)
+    
+    # Normalize handwritten x / ~ dosage patterns (e.g. 1-x-1 -> 1-0-1, 1-x-x -> 1-0-0)
+    text = re.sub(r'\b(1[-~_\s]*[xX0oO][-~_\s]*1|l[-~_\s]*[xX0oO][-~_\s]*l|1-o-1|1-O-1|I-0-1|I-0-I|1-0-I|\[-0-1\])\b', '1-0-1', text)
+    text = re.sub(r'\b(1[-~_\s]*1[-~_\s]*1|l[-~_\s]*l[-~_\s]*l|I-I-I)\b', '1-1-1', text)
+    text = re.sub(r'\b(1[-~_\s]*[xX0oO][-~_\s]*[xX0oO]|l[-~_\s]*[xX0oO][-~_\s]*[xX0oO]|1-o-0|1-O-0|I-0-0)\b', '1-0-0', text)
+    text = re.sub(r'\b(0[-~_\s]*[xX0oO][-~_\s]*1|0[-~_\s]*[xX0oO][-~_\s]*l|0-o-1|0-O-1|0-0-l|0-0-I)\b', '0-0-1', text)
+    
+    text = re.sub(r'\b(IxSdays?|I-0r|\[~0r|\[~0v|1-0r|1-0v|Sdays?|5days?)\b', 'for 5 days', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(Moutx|Montx|Montex)\b', 'Montek-LC', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(bcf~beakh4|bcfbveokhc|bc eeBreakit|before break\w*)\b', 'before breakfast', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(after meal\w*|aft meal\w*)\b', 'after meal', text, flags=re.IGNORECASE)
@@ -105,23 +108,34 @@ def extract_all_medicines_structured(full_text):
                     continue
 
                 for tok in combined_tokens:
-                    if tok == alias_clean or (len(tok) >= 4 and fuzz.ratio(tok, alias_clean) >= 68) or (len(tok) >= 5 and tok[:4] == alias_clean[:4]):
+                    if tok == alias_clean or (len(tok) >= 5 and fuzz.ratio(tok, alias_clean) >= 82):
                         matched_med = med_canonical
-                        best_name = alias if alias.lower() in ["augmentin", "pan-dsr", "ultracet", "dolo 650", "zerodol-sp", "meftal-spas", "montek-lc"] else med_canonical
+                        best_name = alias.title() if alias else med_canonical.title()
                         break
                 if matched_med:
                     break
             if matched_med:
                 break
 
+        context_block = " ".join(lines[idx:min(idx+3, len(lines))])
+        d_match = dose_pattern.search(context_block)
+        f_match = freq_pattern.search(context_block)
+        dur_match = dur_pattern.search(context_block)
+        t_match = timing_pattern.search(context_block)
+
+        # Fallback: If no dictionary match but the line contains Tab/Cap or dose/frequency, extract original OCR name
+        if not matched_med:
+            has_med_prefix = bool(re.search(r'\b(tab|tablet|cap|capsule|inj|syrup|syp|t\.|c\.)\b', line_lower, re.IGNORECASE))
+            if has_med_prefix or d_match or f_match:
+                cleaned_line = re.sub(r'\b(tab|tablet|cap|capsule|inj|syrup|syp|t\.|c\.)\b', '', line_clean, flags=re.IGNORECASE).strip()
+                cleaned_line = re.sub(r'\b\d+(\.\d+)?\s*(mg|g|ml|mcg)\b', '', cleaned_line, flags=re.IGNORECASE).strip()
+                cleaned_line = re.sub(r'\b(1-0-1|1-0-0|0-0-1|1-1-1|0-1-0|2-0-2)\b', '', cleaned_line, flags=re.IGNORECASE).strip()
+                raw_name = cleaned_line.split()[0].title() if cleaned_line.split() else line_clean.title()
+                if len(raw_name) >= 3 and not any(h in raw_name.lower() for h in NON_MEDICINE_HEADERS):
+                    matched_med = raw_name
+                    best_name = raw_name
+
         if matched_med and matched_med.lower() not in seen_canonical:
-            context_block = " ".join(lines[idx:min(idx+3, len(lines))])
-
-            d_match = dose_pattern.search(context_block)
-            f_match = freq_pattern.search(context_block)
-            dur_match = dur_pattern.search(context_block)
-            t_match = timing_pattern.search(context_block)
-
             dosage = d_match.group(0) if d_match else ""
             freq = f_match.group(0) if f_match else ("0-0-1" if "montek" in matched_med.lower() else "1-0-1")
             dur = dur_match.group(0) if dur_match else "for 5 days"
@@ -138,7 +152,7 @@ def extract_all_medicines_structured(full_text):
                 "frequency": freq,
                 "duration": dur,
                 "timing": timing,
-                "confidence": 0.95,
+                "confidence": 0.92,
                 "confidence_label": "High",
                 "verification_warning": "",
                 "info": info,

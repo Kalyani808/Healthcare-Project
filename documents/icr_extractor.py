@@ -194,18 +194,16 @@ class PrescriptionICR:
         file_size = os.path.getsize(image_path)
         print(f"[ICR] Processing file: {image_path} ({file_size} bytes)")
 
-        # Step 2: Cloud Vision LLM (Only if explicitly enabled with active credits)
+        # Step 2: Cloud Vision LLM (Automatically enabled when OPENROUTER_API_KEY is set)
         api_key = os.getenv("OPENROUTER_API_KEY")
-        use_cloud = os.getenv("USE_CLOUD_VISION", "false").lower() in ("true", "1")
         if not api_key:
             try:
                 from decouple import config
                 api_key = config("OPENROUTER_API_KEY", default=None)
-                use_cloud = config("USE_CLOUD_VISION", default="false").lower() in ("true", "1")
             except Exception:
                 pass
 
-        if api_key and use_cloud:
+        if api_key:
             try:
                 import base64
                 import json
@@ -248,7 +246,7 @@ class PrescriptionICR:
                         "max_tokens": 800,
                         "response_format": {"type": "json_object"}
                     },
-                    timeout=3.0
+                    timeout=12.0
                 )
 
                 if resp.status_code == 200:
@@ -272,6 +270,56 @@ class PrescriptionICR:
                     print(f"[VISION LLM ERROR] API responded with status {resp.status_code}: {resp.text}")
             except Exception as v_err:
                 print(f"[VISION LLM FALLBACK] Falling back to local OCR due to: {v_err}")
+
+        # Step 2b: Local Ollama Vision LLM Model Check (llama3.2-vision, llava, moondream, etc.)
+        try:
+            import socket, urllib.request, base64, json, io
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.05)
+            if s.connect_ex(("127.0.0.1", 11434)) == 0:
+                s.close()
+                req = urllib.request.Request("http://127.0.0.1:11434/api/tags")
+                with urllib.request.urlopen(req, timeout=0.5) as resp:
+                    if resp.status == 200:
+                        m_data = json.loads(resp.read().decode('utf-8'))
+                        m_names = [m.get('name', '') for m in m_data.get('models', [])]
+                        v_models = [m for m in m_names if any(v in m.lower() for v in ['vision', 'llava', 'bakllava', 'moondream'])]
+                        if v_models:
+                            chosen_v_model = v_models[0]
+                            pil_img = Image.open(image_path)
+                            if pil_img.mode in ('RGBA', 'P'):
+                                pil_img = pil_img.convert('RGB')
+                            pil_img.thumbnail((1000, 1000), Image.Resampling.BILINEAR)
+                            buf = io.BytesIO()
+                            pil_img.save(buf, format='JPEG', quality=85)
+                            b64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+                            prompt_str = "Extract all prescribed medicines with dosage, frequency, and instructions into JSON: {\"medicines\": [{\"name\": \"...\", \"dosage\": \"...\", \"frequency\": \"...\", \"duration\": \"...\"}]}"
+                            payload = json.dumps({
+                                "model": chosen_v_model,
+                                "prompt": prompt_str,
+                                "images": [b64_img],
+                                "stream": False,
+                                "format": "json"
+                            }).encode('utf-8')
+                            vreq = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
+                            with urllib.request.urlopen(vreq, timeout=12.0) as vresp:
+                                if vresp.status == 200:
+                                    vout = json.loads(vresp.read().decode('utf-8')).get('response', '')
+                                    if vout and 'medicines' in vout:
+                                        print(f"[OLLAMA VISION LLM SUCCESS] Extracted with {chosen_v_model}")
+                                        proc_time = round(time.time() - start_time, 2)
+                                        return {
+                                            "document_id": document_id,
+                                            "text": vout,
+                                            "extracted_text": vout,
+                                            "confidence": 0.96,
+                                            "processing_time_seconds": proc_time,
+                                            "status": "success",
+                                            "model_used": chosen_v_model
+                                        }
+        except Exception as ollama_v_err:
+            pass
 
         # Step 3: Local Fast High-Accuracy EasyOCR Fallback Pipeline
         img = cv2.imread(image_path)

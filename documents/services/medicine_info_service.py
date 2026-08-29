@@ -115,12 +115,34 @@ MEDICINE_USAGE_DATABASE = {
         "category": "Pain & Swelling Relief",
         "category_te": "నొప్పి మరియు వాపు నివారిణి",
         "category_hi": "दर्द और सूजन की दवा",
-        "category_mr": "वेदना आणि सूज शामक",
+        "category_mr": "वेदना మరియు सूज शामक",
         "usage_en": "Combats pain, tissue swelling, and speeds post-surgical recovery",
         "usage_te": "శరీర నొప్పి, గాయాల వాపు తగ్గించి వేగంగా కోలుకోవడానికి ఉపయోగపడుతుంది",
         "usage_hi": "दर्द, सूजन को कम करने और घाव को जल्दी ठीक करने के लिए",
         "usage_mr": "वेदना आणि सूज कमी करण्यासाठी",
         "precautions_en": "Take after meals with water."
+    },
+    "chymoral": {
+        "category": "Anti-inflammatory Enzyme",
+        "category_te": "వాపు మరియు నొప్పి నివారిణి (ఎంజైమ్)",
+        "category_hi": "सूजन और दर्द निवारक (एंजाइम)",
+        "category_mr": "सूज आणि वेदना शामक",
+        "usage_en": "Reduces severe swelling, edema, and tissue inflammation post-injury/surgery",
+        "usage_te": "గాయాలు లేదా సర్జరీ తర్వాత వచ్చే తీవ్రమైన వాపు మరియు నొప్పిని తగ్గించడానికి",
+        "usage_hi": "चोट या सर्जरी के बाद की गंभीर सूजन और दर्द को कम करने के लिए",
+        "usage_mr": "सूज आणि वेदना कमी करण्यासाठी",
+        "precautions_en": "Take 30 minutes before meals with water."
+    },
+    "pan-40": {
+        "category": "Antacid & Gastric Acid Inhibitor",
+        "category_te": "ఎసిడిటీ మరియు గ్యాస్ నివారిణి",
+        "category_hi": "एसिडिटी और गैस निवारक",
+        "category_mr": "पित्त మరియు గ్యాస్ निवारक",
+        "usage_en": "Reduces excess stomach acid, relieves heartburn, and heals gastric ulcers",
+        "usage_te": "కడుపులో అదనపు ఆమ్లాన్ని తగ్గించి, మంట మరియు గ్యాస్ నుండి ఉపశమనం కలిగిస్తుంది",
+        "usage_hi": "पेट के अतिरिक्त एसिड को कम करता है और सीने में जलन से राहत देता है",
+        "usage_mr": "पोटातील ॲसिड कमी करून जळजळ दूर करतो",
+        "precautions_en": "Best taken empty stomach 30 mins before breakfast."
     },
     "metformin": {
         "category": "Oral Antidiabetic",

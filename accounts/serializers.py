@@ -12,12 +12,21 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', required=False, allow_blank=True)
     phone_number = serializers.CharField(source='user.phone_number', required=False, allow_blank=True)
     first_name = serializers.CharField(source='user.first_name', required=False, allow_blank=True)
+    last_name = serializers.CharField(source='user.last_name', required=False, allow_blank=True)
+    full_name = serializers.SerializerMethodField()
     username = serializers.CharField(source='user.username', read_only=True)
+
+    def get_full_name(self, obj):
+        fname = (obj.user.first_name or '').strip()
+        lname = (obj.user.last_name or '').strip()
+        if fname or lname:
+            return f"{fname} {lname}".strip()
+        return obj.user.username.capitalize() if obj.user.username else "Patient"
 
     class Meta:
         model = PatientProfile
         fields = [
-            'id', 'user', 'username', 'email', 'phone_number', 'first_name',
+            'id', 'user', 'username', 'email', 'phone_number', 'first_name', 'last_name', 'full_name',
             'date_of_birth', 'gender', 'address', 'village_town',
             'district', 'state', 'emergency_contact_name', 'emergency_contact_number'
         ]

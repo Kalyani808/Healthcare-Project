@@ -523,17 +523,30 @@ const UploadDocument = () => {
                       <FaTimes /> <span>Remove</span>
                     </button>
                   </div>
-                  <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[240px] flex items-center justify-center p-2.5 overflow-hidden group">
+                  <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[250px] flex items-center justify-center p-2.5 overflow-hidden group">
                     <img
                       src={preview}
                       alt="Document Preview"
-                      className="max-h-[220px] max-w-full object-contain rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-105"
+                      className={`max-h-[230px] max-w-full object-contain rounded-lg shadow-sm transition-all duration-300 ${uploading ? 'filter brightness-90 contrast-105' : 'group-hover:scale-105'}`}
                     />
+                    
+                    {/* 🌟 ELEGANT OCR SCANNING BEAM ANIMATION */}
+                    {uploading && (
+                      <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden rounded-2xl bg-teal-950/20 backdrop-blur-[1px]">
+                        <div className="absolute left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_20px_#22d3ee] animate-ocr-scan" />
+                        <div className="absolute left-0 w-full bg-gradient-to-b from-cyan-400/20 via-teal-500/10 to-transparent animate-ocr-beam pointer-events-none" />
+                        <div className="absolute top-3 left-3 bg-teal-900/90 text-cyan-300 border border-cyan-400/40 px-3 py-1 rounded-full text-[10px] font-extrabold flex items-center space-x-2 backdrop-blur shadow-md">
+                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                          <span>AI Vision OCR Scanning Prescription...</span>
+                        </div>
+                      </div>
+                    )}
+
                     <a
                       href={preview}
                       target="_blank"
                       rel="noreferrer"
-                      className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-[#1E293B] hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl shadow-md backdrop-blur transition-all"
+                      className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-[#1E293B] hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl shadow-md backdrop-blur transition-all z-30"
                       title="View Full Resolution"
                     >
                       <FaEye />

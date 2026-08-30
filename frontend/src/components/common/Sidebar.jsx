@@ -29,6 +29,8 @@ const Sidebar = () => {
       links: [
         { to: '/patient/dashboard', label: 'Overview Dashboard', icon: FaChartLine },
         { to: '/patient/upload-document', label: 'Upload Rx & Lab', icon: FaFileUpload, badge: '5s AI' },
+        { to: '/patient/skin-analyzer', label: 'Skin & Face Scanner', icon: FaMicroscope, badge: 'Vision' },
+        { to: '/patient/pill-identifier', label: 'Visual Pill Identifier', icon: FaPills, badge: 'AI Pill' },
         { to: '/patient/document-history', label: 'Documents Vault', icon: FaHistory },
         { to: '/patient/health-reports', label: 'Diagnostic Reports', icon: FaFileMedical },
       ]

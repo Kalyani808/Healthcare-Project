@@ -18,8 +18,10 @@ import {
   FaVolumeUp,
   FaExclamationTriangle,
   FaTrashAlt,
-  FaCheck
+  FaCheck,
+  FaWhatsapp
 } from 'react-icons/fa';
+import { shareScheduleOnWhatsApp } from '../../utils/whatsappHelper';
 
 const MedicationReminders = () => {
   const [todayData, setTodayData] = useState(null);
@@ -194,8 +196,16 @@ const MedicationReminders = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => shareScheduleOnWhatsApp(todayData, 'Patient')}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-600/20 flex items-center space-x-2 transition-all active:scale-95 shrink-0"
+            >
+              <FaWhatsapp className="text-base" />
+              <span>Share on WhatsApp</span>
+            </button>
             <Button
-              variant="mint"
+              variant="primary"
               size="md"
               icon={FaPlus}
               onClick={() => setShowAddModal(true)}

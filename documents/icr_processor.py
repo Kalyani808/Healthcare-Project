@@ -61,7 +61,12 @@ def normalize_ocr_text(text):
     
     text = re.sub(r'\b(IxSdays?|I-0r|\[~0r|\[~0v|1-0r|1-0v|Sdays?|5days?)\b', 'for 5 days', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(Moutx|Montx|Montex)\b', 'Montek-LC', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(bcf~beakh4|bcfbveokhc|bc eeBreakit|before break\w*)\b', 'before breakfast', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(Augnuntn|Augnntn|Augmntn|Agumentin|Augment)\b', 'Augmentin', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(Ul-vacdt|Ulvacdt|Ul-vocdt|Ultracit|Ultras)\b', 'Ultracet', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(Pan-\s*DSR|PanDSR|Pan\s*DSR)\b', 'Pan-DSR', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b62503\b', '625 mg', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(80\s*mix|30\s*mins?|30\s*mix)\b', '30 mins', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(bcf~beakh4|bcfo~bveokk4|bcfbveokhc|bc eeBreakit|before break\w*)\b', 'before breakfast', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(after meal\w*|aft meal\w*)\b', 'after meal', text, flags=re.IGNORECASE)
     return text
 
@@ -108,7 +113,7 @@ def extract_all_medicines_structured(full_text):
                     continue
 
                 for tok in combined_tokens:
-                    if tok == alias_clean or (len(tok) >= 5 and fuzz.ratio(tok, alias_clean) >= 82):
+                    if tok == alias_clean or (len(tok) >= 5 and fuzz.ratio(tok, alias_clean) >= 70):
                         matched_med = med_canonical
                         best_name = alias.title() if alias else med_canonical.title()
                         break

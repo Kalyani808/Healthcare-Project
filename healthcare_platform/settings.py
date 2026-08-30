@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'emergency',
     'education',
     'recommendations',
+    'vision_ai',
 ]
 
 REST_FRAMEWORK = {

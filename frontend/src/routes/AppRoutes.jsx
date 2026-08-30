@@ -22,6 +22,8 @@ import MedicationReminders from '../pages/patient/MedicationReminders';
 import EmergencyAssistance from '../pages/patient/EmergencyAssistance';
 import HealthEducation from '../pages/patient/HealthEducation';
 import AIRecommendations from '../pages/patient/AIRecommendations';
+import SkinAnalyzer from '../pages/patient/SkinAnalyzer';
+import PillIdentifier from '../pages/patient/PillIdentifier';
 
 import DoctorDashboard from '../pages/doctor/DoctorDashboard';
 import DoctorProfile from '../pages/doctor/DoctorProfile';
@@ -47,6 +49,8 @@ const AppRoutes = () => {
         <Route path="dashboard" element={<PatientDashboard />} />
         <Route path="profile" element={<PatientProfile />} />
         <Route path="upload-document" element={<UploadDocument />} />
+        <Route path="skin-analyzer" element={<SkinAnalyzer />} />
+        <Route path="pill-identifier" element={<PillIdentifier />} />
         <Route path="reminders" element={<MedicationReminders />} />
         <Route path="recommendations" element={<AIRecommendations />} />
         <Route path="education" element={<HealthEducation />} />

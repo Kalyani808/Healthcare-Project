@@ -33,8 +33,10 @@ import {
   FaNotesMedical,
   FaMicroscope,
   FaChartBar,
-  FaCamera
+  FaCamera,
+  FaWhatsapp
 } from 'react-icons/fa';
+import { sharePrescriptionOnWhatsApp } from '../../utils/whatsappHelper';
 
 const UploadDocument = () => {
   const [file, setFile] = useState(null);
@@ -678,9 +680,19 @@ const UploadDocument = () => {
               </div>
 
               {analyzed && (
-                <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  {isLabReportActive ? '📑 Lab Report' : '💊 Prescription'}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => sharePrescriptionOnWhatsApp(analyzed.medicines || [], docName || file?.name || 'Doctor Prescription')}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold flex items-center space-x-1 shadow-xs transition-all active:scale-95"
+                  >
+                    <FaWhatsapp className="text-xs" />
+                    <span>Share on WhatsApp</span>
+                  </button>
+                  <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    {isLabReportActive ? '📑 Lab Report' : '💊 Prescription'}
+                  </span>
+                </div>
               )}
             </div>
 

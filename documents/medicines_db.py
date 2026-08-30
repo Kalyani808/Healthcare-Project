@@ -37,6 +37,14 @@ COMPREHENSIVE_MEDICINE_DATABASE = {
         "aliases": ["Tramadol", "Ultram", "Tramazac", "Contramal"],
         "benefits": "Opioid analgesic for moderate to severe post-surgical or chronic pain."
     },
+    "Ultracet": {
+        "aliases": ["Ultracet", "Ul-vacdt", "Ulvacdt", "Ultraset", "Tramadol", "Tramadol-Paracetamol"],
+        "benefits": "Combination painkiller (Tramadol + Paracetamol) for acute dental, post-surgical, and musculoskeletal pain."
+    },
+    "Augmentin": {
+        "aliases": ["Augmentin", "Augnuntn", "Augmntn", "Amoxyclav", "Clavam", "Moxikind-CV"],
+        "benefits": "Broad-spectrum penicillin antibiotic (Amoxicillin + Clavulanate) used to treat chest, throat, ear, and dental bacterial infections."
+    },
     "Nimesulide": {
         "aliases": ["Nimesulide", "Nise", "Nicip"],
         "benefits": "Fast-acting pain reliever for acute inflammatory pain."

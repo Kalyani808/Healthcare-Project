@@ -23,7 +23,9 @@ import {
   FaFileMedical,
   FaBookMedical,
   FaLightbulb,
-  FaUserMd
+  FaUserMd,
+  FaPills,
+  FaMicroscope
 } from 'react-icons/fa';
 
 const Navbar = () => {
@@ -199,6 +201,26 @@ const Navbar = () => {
                       <div>
                         <span className="block">Upload Rx & Lab Report</span>
                         <span className="block text-[10px] text-slate-400 font-normal">Fast 5s OCR Analyzer</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/skin-analyzer"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaHeartbeat className="text-rose-500" />
+                      <div>
+                        <span className="block">AI Skin & Face Scanner</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Acne & pigmentation analysis</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/patient/pill-identifier"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaPills className="text-emerald-500" />
+                      <div>
+                        <span className="block">Visual Pill Identifier</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Tablet & blister strip scanner</span>
                       </div>
                     </Link>
                     <Link

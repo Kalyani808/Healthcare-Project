@@ -18,8 +18,10 @@ import {
   FaExclamationTriangle,
   FaDirections,
   FaShieldAlt,
-  FaUserNurse
+  FaUserNurse,
+  FaWhatsapp
 } from 'react-icons/fa';
+import { sendEmergencySOSWhatsApp } from '../../utils/whatsappHelper';
 
 const EmergencyAssistance = () => {
   const [facilities, setFacilities] = useState([]);
@@ -140,13 +142,23 @@ const EmergencyAssistance = () => {
             </p>
           </div>
 
-          <button
-            onClick={handleTriggerSOS}
-            className="px-6 py-3.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-sm sm:text-base rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 shrink-0 border-2 border-yellow-200"
-          >
-            <FaExclamationTriangle className="text-rose-600 text-lg" />
-            <span>DISPATCH SOS & ALERT CONTACTS</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0">
+            <button
+              onClick={handleTriggerSOS}
+              className="w-full sm:w-auto px-5 py-3.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs sm:text-sm rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 border-2 border-yellow-200"
+            >
+              <FaExclamationTriangle className="text-rose-600 text-base" />
+              <span>DISPATCH SOS 108</span>
+            </button>
+
+            <button
+              onClick={() => sendEmergencySOSWhatsApp('Patient', 'O+')}
+              className="w-full sm:w-auto px-5 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 border border-emerald-300"
+            >
+              <FaWhatsapp className="text-lg" />
+              <span>WhatsApp Family SOS</span>
+            </button>
+          </div>
         </div>
 
         {/* Speed Dial Numbers Row */}

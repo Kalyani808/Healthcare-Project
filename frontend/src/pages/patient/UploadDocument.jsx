@@ -16,6 +16,12 @@ import {
   normalizeLangKey
 } from '../../utils/prescriptionLocalization';
 import {
+  cachePrescription,
+  getCachedPrescriptions,
+  getCachedPrescriptionById
+} from '../../utils/offlineStorage';
+import { useOffline } from '../../context/OfflineContext';
+import {
   FaFileUpload,
   FaCloudUploadAlt,
   FaRobot,
@@ -60,6 +66,16 @@ const UploadDocument = () => {
   const [syncedCount, setSyncedCount] = useState(null);
   const [savedRemindersMap, setSavedRemindersMap] = useState({});
 
+  // Offline Caching State
+  const { isOffline } = useOffline();
+  const [cachedDocs, setCachedDocs] = useState([]);
+  const [selectedCachedId, setSelectedCachedId] = useState('');
+
+  // Drug Interaction Check State
+  const [interactionCheck, setInteractionCheck] = useState(null);
+  const [interactionLoading, setInteractionLoading] = useState(false);
+  const [interactionError, setInteractionError] = useState(null);
+
   // Active View Mode (Auto-detected from OCR or toggled by user)
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'audio_transcript', 'raw_ocr'
   const [documentMode, setDocumentMode] = useState('auto'); // 'auto', 'prescription', 'lab_report'
@@ -87,7 +103,6 @@ const UploadDocument = () => {
   const [isPausedAudio, setIsPausedAudio] = useState(false);
   const audioPlayerRef = useRef(null);
 
-  // Sync preferred language changes
   useEffect(() => {
     const handleLanguageChange = (e) => {
       const newLang = e.detail?.lang || 'te-IN';
@@ -98,9 +113,76 @@ const UploadDocument = () => {
       else setPreferredLang('en');
     };
 
-    window.addEventListener('language-changed', handleLanguageChange);
-    return () => window.removeEventListener('language-changed', handleLanguageChange);
+    window.addEventListener('languageChanged', handleLanguageChange);
+    return () => window.removeEventListener('languageChanged', handleLanguageChange);
   }, []);
+
+  // Load and cache prescriptions for offline availability
+  const loadCachedDocs = async () => {
+    try {
+      const list = await getCachedPrescriptions();
+      setCachedDocs(list);
+    } catch (err) {
+      console.warn('Error loading cached documents:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (navigator.onLine) {
+      api.get('/api/documents/')
+        .then((res) => {
+          const docs = res.data.results || res.data || [];
+          if (Array.isArray(docs)) {
+            docs.forEach((d) => {
+              if (d.status === 'completed' || d.extracted_data || d.medicines) {
+                cachePrescription(d);
+              }
+            });
+          }
+          loadCachedDocs();
+        })
+        .catch(() => loadCachedDocs());
+    } else {
+      loadCachedDocs();
+    }
+  }, []);
+
+  // Post-Extraction Drug Interaction Check (Runs separately when 2+ medicines are present)
+  useEffect(() => {
+    const meds = analyzed?.medicines;
+    if (Array.isArray(meds) && meds.length >= 2) {
+      let isMounted = true;
+      setInteractionLoading(true);
+      setInteractionError(null);
+
+      api.post('/api/documents/check-drug-interactions/', { medicines: meds })
+        .then((res) => {
+          if (isMounted) {
+            setInteractionCheck(res.data);
+            setInteractionError(null);
+          }
+        })
+        .catch((err) => {
+          if (isMounted) {
+            console.error('Drug interaction check error:', err);
+            setInteractionError('Drug interaction check is temporarily unavailable.');
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setInteractionLoading(false);
+          }
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setInteractionCheck(null);
+      setInteractionLoading(false);
+      setInteractionError(null);
+    }
+  }, [analyzed?.medicines]);
 
   // Cleanup audio player on unmount
   useEffect(() => {
@@ -359,7 +441,7 @@ const UploadDocument = () => {
             const isLab = statusData.doc_classification === 'lab_report' ||
                           (statusData.lab_report && statusData.lab_report.is_lab_report);
 
-            setAnalyzed({
+            const analyzedResult = {
               extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
               doc_classification: statusData.doc_classification || (isLab ? 'lab_report' : 'prescription'),
               medicines: Array.isArray(statusData.medicines) ? statusData.medicines : [],
@@ -373,7 +455,19 @@ const UploadDocument = () => {
               quality_metrics: statusData.quality_metrics || {},
               requires_review: statusData.requires_manual_review,
               db_doc: response ? response.data : null,
-            });
+            };
+
+            setAnalyzed(analyzedResult);
+
+            // Automatically cache completed document in IndexedDB
+            cachePrescription({
+              id: activeDocId || statusData.id,
+              title: docName || `Prescription #${activeDocId || 'Saved'}`,
+              analyzed: analyzedResult,
+              medicines: analyzedResult.medicines,
+              lab_report: analyzedResult.lab_report,
+              raw_ocr: analyzedResult.extracted_text
+            }).then(() => loadCachedDocs());
           } else if (statusData && statusData.status === 'failed') {
             clearInterval(pollInterval);
             setUploading(false);
@@ -523,6 +617,40 @@ const UploadDocument = () => {
               </div>
               <span className="text-[11px] font-semibold text-slate-400">Prescriptions & Lab Tests</span>
             </div>
+
+            {/* Offline Saved Prescriptions Selector */}
+            {cachedDocs && cachedDocs.length > 0 && (
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                  <span className="flex items-center space-x-1.5">
+                    <span>📁</span>
+                    <span>Saved Prescriptions ({cachedDocs.length} available offline)</span>
+                  </span>
+                </div>
+                <select
+                  value={selectedCachedId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedCachedId(id);
+                    const found = cachedDocs.find((c) => String(c.id) === String(id));
+                    if (found && found.analyzed) {
+                      setAnalyzed(found.analyzed);
+                      setDocName(found.docName);
+                      setActiveDocId(found.id);
+                      setInlineError(null);
+                    }
+                  }}
+                  className="w-full text-xs font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">-- Choose a Saved Prescription --</option>
+                  {cachedDocs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.docName} ({new Date(c.cached_at || c.created_at).toLocaleDateString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <form onSubmit={handleUpload} className="space-y-4">
               <Input
@@ -1034,6 +1162,125 @@ const UploadDocument = () => {
                     </div>
                   )}
                 </div>
+
+                {/* ======================================================== */}
+                {/* ⚠️ DRUG INTERACTION & SAFETY CHECK SECTION (2+ MEDS)    */}
+                {/* ======================================================== */}
+                {analyzed.medicines && analyzed.medicines.length >= 2 && (
+                  <div className="mt-4 pt-2">
+                    {interactionLoading ? (
+                      <div className="p-4 bg-teal-50/50 dark:bg-slate-900 border border-teal-200 dark:border-slate-700 rounded-2xl flex items-center space-x-3 text-xs text-teal-800 dark:text-teal-300">
+                        <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="font-semibold">Checking drug-drug interactions & safety against NIH RxNorm & openFDA...</span>
+                      </div>
+                    ) : interactionError ? (
+                      <div className="p-3.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                        <span>⚠️ {interactionError}</span>
+                      </div>
+                    ) : interactionCheck ? (
+                      <div className="space-y-3">
+                        {/* Section Title */}
+                        <div className="flex items-center justify-between px-1">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center space-x-1.5">
+                            <span>🛡️</span>
+                            <span>Drug Interaction & Safety Analysis</span>
+                          </h4>
+                          <span className="text-[10px] text-slate-400 font-medium">NIH RxNorm + openFDA</span>
+                        </div>
+
+                        {/* 1. Major or Moderate Interactions */}
+                        {interactionCheck.interactions && interactionCheck.interactions.length > 0 ? (
+                          interactionCheck.interactions.map((it, idx) => (
+                            <div
+                              key={`it_${idx}`}
+                              className={`p-4 rounded-2xl border text-left space-y-2 ${
+                                it.severity === 'major'
+                                  ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900'
+                                  : 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                      it.severity === 'major' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'
+                                    }`}>
+                                      {it.severity === 'major' ? '🚨 Major Interaction' : '⚠️ Moderate Interaction'}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                                      {it.drug_a} + {it.drug_b}
+                                    </span>
+                                  </div>
+                                  <h5 className="text-xs font-extrabold text-slate-900 dark:text-slate-100 pt-0.5">
+                                    {it.title}
+                                  </h5>
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                                {it.description}
+                              </p>
+                              <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                                <span>Source: {it.source}</span>
+                                <span className="font-semibold text-rose-600 dark:text-rose-400">Consult your doctor before combined intake</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : null}
+
+                        {/* 2. Duplicate Therapy Warnings */}
+                        {interactionCheck.duplicates && interactionCheck.duplicates.length > 0 ? (
+                          interactionCheck.duplicates.map((dup, idx) => (
+                            <div
+                              key={`dup_${idx}`}
+                              className="p-4 rounded-2xl border bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-900 text-left space-y-1.5"
+                            >
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500 text-white">
+                                  ⚠️ Duplicate Therapy
+                                </span>
+                                <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
+                                  {dup.title}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                                {dup.description}
+                              </p>
+                            </div>
+                          ))
+                        ) : null}
+
+                        {/* 3. Unmatched Medicines Notice (If Any) */}
+                        {interactionCheck.unmatched_medicines && interactionCheck.unmatched_medicines.length > 0 && (
+                          <div className="p-3 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                            <span className="font-bold text-slate-700 dark:text-slate-300 block">
+                              ℹ️ Interaction check unavailable for:
+                            </span>
+                            <ul className="list-disc pl-4 space-y-0.5">
+                              {interactionCheck.unmatched_medicines.map((u, idx) => (
+                                <li key={idx}>
+                                  <strong>{u.name}</strong> — {u.message}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* 4. Clean Check State */}
+                        {!interactionCheck.has_warnings && (
+                          <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-2xl text-left space-y-1">
+                            <div className="flex items-center space-x-1.5 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs">
+                              <span>✓</span>
+                              <span>No Known Dangerous Drug Interactions Found</span>
+                            </div>
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                              All {interactionCheck.matched_count} identified medicines were cross-checked against NIH RxNorm and openFDA databases. No major contraindications or duplicate active ingredients were detected.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {/* Action Buttons at the bottom of the whole list */}
                 {analyzed.medicines && analyzed.medicines.length > 0 && (

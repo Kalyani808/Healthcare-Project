@@ -5,6 +5,13 @@ import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
 import api from '../../api/axios';
 import {
+  cacheTodaySchedule,
+  getCachedTodaySchedule,
+  updateCachedDoseStatus,
+  enqueueSyncAction
+} from '../../utils/offlineStorage';
+import { useOffline } from '../../context/OfflineContext';
+import {
   FaPills,
   FaCheckCircle,
   FaTimesCircle,
@@ -50,10 +57,22 @@ const MedicationReminders = () => {
   const [caregiverRel, setCaregiverRel] = useState('family');
   const [caregiverPhone, setCaregiverPhone] = useState('');
   const [caregiverEmail, setCaregiverEmail] = useState('');
+  const [caregiverConsent, setCaregiverConsent] = useState(true);
+
+  const { isOffline, refreshPendingCount } = useOffline();
 
   const fetchAllData = async () => {
     setLoading(true);
     try {
+      if (!navigator.onLine) {
+        const cached = await getCachedTodaySchedule();
+        if (cached) {
+          setTodayData(cached);
+        }
+        setLoading(false);
+        return;
+      }
+
       const [todayRes, schedulesRes, caregiversRes, adherenceRes] = await Promise.all([
         api.get('/api/reminders/schedules/today-schedule/'),
         api.get('/api/reminders/schedules/'),
@@ -65,9 +84,18 @@ const MedicationReminders = () => {
       setSchedules(schedulesRes.data.results || schedulesRes.data);
       setCaregivers(caregiversRes.data.results || caregiversRes.data);
       setAdherence(adherenceRes.data);
+
+      // Automatically cache fresh schedule for offline usage
+      await cacheTodaySchedule(todayRes.data);
     } catch (err) {
-      console.error('Error loading reminders data:', err);
-      setAlertMsg({ type: 'error', text: 'Failed to load medication schedules.' });
+      console.warn('Network error, attempting offline cache recovery:', err);
+      const cached = await getCachedTodaySchedule();
+      if (cached) {
+        setTodayData(cached);
+        setAlertMsg({ type: 'info', text: 'Showing saved offline medication schedule.' });
+      } else {
+        setAlertMsg({ type: 'error', text: 'Failed to load medication schedules.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -75,26 +103,81 @@ const MedicationReminders = () => {
 
   useEffect(() => {
     fetchAllData();
+
+    const handleDataSynced = () => {
+      fetchAllData();
+    };
+
+    window.addEventListener('offlineDataSynced', handleDataSynced);
+    return () => window.removeEventListener('offlineDataSynced', handleDataSynced);
   }, []);
 
   const handleMarkDose = async (logId, status) => {
+    // 1. OFFLINE PATH: Optimistic UI + IndexedDB Cache + Sync Queue
+    if (!navigator.onLine) {
+      // Update local state optimistically
+      setTodayData((prev) => {
+        if (!prev || !prev.slots) return prev;
+        const next = JSON.parse(JSON.stringify(prev));
+        for (const k of Object.keys(next.slots)) {
+          for (const it of next.slots[k].items || []) {
+            if (it.log_id === logId) {
+              it.status = status;
+              it.taken_at = status === 'taken' ? new Date().toISOString() : null;
+            }
+          }
+        }
+        const allItems = Object.values(next.slots).flatMap((s) => s.items || []);
+        next.taken_doses = allItems.filter((i) => i.status === 'taken').length;
+        next.adherence_pct = next.total_doses > 0
+          ? Math.round((next.taken_doses / next.total_doses) * 100)
+          : 100;
+        return next;
+      });
+
+      // Save to IndexedDB cache and sync queue
+      await updateCachedDoseStatus(logId, status);
+      await enqueueSyncAction('mark-dose', {
+        log_id: logId,
+        status: status,
+        client_timestamp: new Date().toISOString()
+      });
+      refreshPendingCount();
+
+      setAlertMsg({
+        type: status === 'missed' ? 'warning' : 'info',
+        text: `Dose marked as ${status.toUpperCase()} (Saved offline — will sync when reconnected)`
+      });
+      return;
+    }
+
+    // 2. ONLINE PATH: Standard API Call
     try {
       await api.post('/api/reminders/schedules/mark-dose/', {
         log_id: logId,
         status: status
       });
 
-      // Play subtle chime on taken
-      if (status === 'taken') {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => {});
-      }
+      setAlertMsg({
+        type: status === 'missed' ? 'warning' : 'success',
+        text: `Dose marked as ${status.toUpperCase()}!`
+      });
 
-      setAlertMsg({ type: 'success', text: `Dose marked as ${status.toUpperCase()}!` });
       fetchAllData();
     } catch (err) {
-      console.error('Error marking dose:', err);
-      setAlertMsg({ type: 'error', text: 'Failed to update dose status.' });
+      console.error('Error marking dose, falling back to offline queue:', err);
+      // Fallback to queue if request failed
+      await updateCachedDoseStatus(logId, status);
+      await enqueueSyncAction('mark-dose', {
+        log_id: logId,
+        status: status,
+        client_timestamp: new Date().toISOString()
+      });
+      refreshPendingCount();
+      setAlertMsg({
+        type: 'info',
+        text: `Network error. Dose marked as ${status.toUpperCase()} (Queued for sync)`
+      });
     }
   };
 
@@ -169,10 +252,13 @@ const MedicationReminders = () => {
   const handleSendTestAlert = async (caregiverId) => {
     try {
       const res = await api.post(`/api/reminders/caregivers/${caregiverId}/send-test-alert/`);
-      setAlertMsg({ type: 'success', text: res.data.message });
+      setAlertMsg({
+        type: 'info',
+        text: res.data.message || 'SMS gateway is currently not configured.'
+      });
     } catch (err) {
       console.error('Error sending alert:', err);
-      setAlertMsg({ type: 'error', text: 'Failed to send alert.' });
+      setAlertMsg({ type: 'error', text: 'Failed to trigger notification.' });
     }
   };
 
@@ -320,10 +406,21 @@ const MedicationReminders = () => {
                           {item.usage_summary && (
                             <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">{item.usage_summary}</p>
                           )}
+                          {item.missed_alert_sent && (
+                            <div className="mt-1.5 flex items-center space-x-1">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 flex items-center space-x-1">
+                                <span>🔔</span> <span>Caregiver Notified</span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {item.status === 'taken' ? (
                           <span className="text-xs font-bold text-emerald-600 flex items-center space-x-1">
                             <FaCheckCircle /> <span>Taken</span>
+                          </span>
+                        ) : item.status === 'missed' ? (
+                          <span className="text-xs font-bold text-rose-600 flex items-center space-x-1">
+                            <FaExclamationTriangle /> <span>Missed</span>
                           </span>
                         ) : (
                           <span className="text-xs font-bold text-amber-600 flex items-center space-x-1">
@@ -401,10 +498,21 @@ const MedicationReminders = () => {
                           {item.usage_summary && (
                             <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">{item.usage_summary}</p>
                           )}
+                          {item.missed_alert_sent && (
+                            <div className="mt-1.5 flex items-center space-x-1">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 flex items-center space-x-1">
+                                <span>🔔</span> <span>Caregiver Notified</span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {item.status === 'taken' ? (
                           <span className="text-xs font-bold text-emerald-600 flex items-center space-x-1">
                             <FaCheckCircle /> <span>Taken</span>
+                          </span>
+                        ) : item.status === 'missed' ? (
+                          <span className="text-xs font-bold text-rose-600 flex items-center space-x-1">
+                            <FaExclamationTriangle /> <span>Missed</span>
                           </span>
                         ) : (
                           <span className="text-xs font-bold text-amber-600 flex items-center space-x-1">
@@ -481,10 +589,21 @@ const MedicationReminders = () => {
                           {item.usage_summary && (
                             <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">{item.usage_summary}</p>
                           )}
+                          {item.missed_alert_sent && (
+                            <div className="mt-1.5 flex items-center space-x-1">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 flex items-center space-x-1">
+                                <span>🔔</span> <span>Caregiver Notified</span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {item.status === 'taken' ? (
                           <span className="text-xs font-bold text-emerald-600 flex items-center space-x-1">
                             <FaCheckCircle /> <span>Taken</span>
+                          </span>
+                        ) : item.status === 'missed' ? (
+                          <span className="text-xs font-bold text-rose-600 flex items-center space-x-1">
+                            <FaExclamationTriangle /> <span>Missed</span>
                           </span>
                         ) : (
                           <span className="text-xs font-bold text-amber-600 flex items-center space-x-1">
@@ -792,11 +911,27 @@ const MedicationReminders = () => {
                 onChange={(e) => setCaregiverEmail(e.target.value)}
               />
 
+              {/* Privacy & Consent Confirmation Checkbox */}
+              <div className="p-3 bg-blue-50 dark:bg-slate-900/80 border border-blue-200 dark:border-slate-700 rounded-xl space-y-1.5">
+                <label className="flex items-start space-x-2 text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={caregiverConsent}
+                    onChange={(e) => setCaregiverConsent(e.target.checked)}
+                    className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                    required
+                  />
+                  <span>
+                    I confirm that this caregiver has consented to receive automated notifications when scheduled doses are missed or in emergencies.
+                  </span>
+                </label>
+              </div>
+
               <div className="flex space-x-3 pt-2">
                 <Button type="button" variant="outline" fullWidth onClick={() => setShowCaregiverModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="mint" fullWidth>
+                <Button type="submit" variant="mint" fullWidth disabled={!caregiverConsent}>
                   Register Caregiver
                 </Button>
               </div>

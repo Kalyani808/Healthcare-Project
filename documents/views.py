@@ -13,7 +13,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['transcribe_voice', 'speak_text', 'ai_chat'] or self.request.path.startswith('/api/voice/transcribe') or self.request.path.startswith('/api/chat'):
+        if self.action in ['transcribe_voice', 'speak_text', 'ai_chat', 'check_drug_interactions'] or self.request.path.startswith('/api/voice/transcribe') or self.request.path.startswith('/api/chat'):
             return [permissions.AllowAny()]
         return super().get_permissions()
 
@@ -298,4 +298,23 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             user=request.user if request.user.is_authenticated else None,
             lang=lang
         )
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='check-drug-interactions', authentication_classes=[], permission_classes=[permissions.AllowAny])
+    def check_drug_interactions(self, request):
+        """
+        POST /api/documents/check-drug-interactions/
+        Body: { "medicines": [ { "name": "Aspirin", "dosage": "75mg" }, ... ] }
+        Runs separate post-extraction drug-drug interaction & duplicate therapy check
+        using NIH RxNorm and openFDA databases.
+        """
+        medicines = request.data.get('medicines', [])
+        if not medicines or not isinstance(medicines, list):
+            return Response(
+                {"checked": False, "error": "A list of medicines is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.drug_interaction_service import DrugInteractionService
+        result = DrugInteractionService.check_all_interactions(medicines)
         return Response(result, status=status.HTTP_200_OK)

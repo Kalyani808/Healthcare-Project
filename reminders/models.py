@@ -72,6 +72,8 @@ class MedicationLog(models.Model):
     scheduled_time = models.TimeField(null=True, blank=True)
     taken_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
+    missed_alert_sent = models.BooleanField(default=False, help_text="Prevents duplicate caregiver SMS alerts")
+    missed_alert_sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

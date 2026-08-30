@@ -74,6 +74,8 @@ class MedicationScheduleViewSet(viewsets.ModelViewSet):
                         'status': log.status,
                         'scheduled_time': str(slot_time) if slot_time else '',
                         'taken_at': log.taken_at.isoformat() if log.taken_at else None,
+                        'missed_alert_sent': log.missed_alert_sent,
+                        'missed_alert_sent_at': log.missed_alert_sent_at.isoformat() if log.missed_alert_sent_at else None,
                     })
 
         total_doses = sum(len(s['items']) for s in slots.values())
@@ -106,11 +108,17 @@ class MedicationScheduleViewSet(viewsets.ModelViewSet):
                 log.taken_at = None
             log.save()
 
+            alert_result = None
+            if new_status == 'missed':
+                # TODO: wire up new SMS provider here
+                pass
+
             return Response({
                 'success': True,
                 'log_id': log.id,
                 'status': log.status,
                 'taken_at': log.taken_at.isoformat() if log.taken_at else None,
+                'missed_alert_sent': log.missed_alert_sent,
                 'message': f"Dose marked as {new_status.upper()}"
             })
         except MedicationLog.DoesNotExist:
@@ -302,14 +310,18 @@ class CaregiverContactViewSet(viewsets.ModelViewSet):
         return CaregiverContact.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        from .services.phone_formatter import format_e164_phone_number
+        raw_phone = serializer.validated_data.get('phone_number')
+        formatted_phone = format_e164_phone_number(raw_phone)
+        serializer.save(user=self.request.user, phone_number=formatted_phone)
 
     @action(detail=True, methods=['post'], url_path='send-test-alert')
     def send_test_alert(self, request, pk=None):
         caregiver = self.get_object()
+        # TODO: wire up new SMS provider here
         return Response({
-            'success': True,
+            'success': False,
             'caregiver': caregiver.name,
             'phone': caregiver.phone_number,
-            'message': f"Test notification sent to caregiver {caregiver.name} ({caregiver.phone_number})"
+            'message': "SMS gateway is currently not configured."
         })

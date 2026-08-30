@@ -5,7 +5,7 @@ import Alert from '../../components/common/Alert';
 import CameraCaptureModal from '../../components/common/CameraCaptureModal';
 import MarkdownMessage from '../../components/common/MarkdownMessage';
 import api from '../../api/axios';
-import { 
+import {
   FaRobot, 
   FaPaperPlane, 
   FaMicrophone, 
@@ -23,6 +23,7 @@ import {
   FaCamera,
   FaImage
 } from 'react-icons/fa';
+import { useOffline } from '../../context/OfflineContext';
 
 const AIChatAssistant = () => {
   const [messages, setMessages] = useState([
@@ -40,6 +41,7 @@ const AIChatAssistant = () => {
   const [prescriptionContext, setPrescriptionContext] = useState(null);
   const [uploadingRx, setUploadingRx] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const { isOffline } = useOffline();
 
   // Preferred Language: 'te', 'hi', 'mr', 'en'
   const [lang, setLang] = useState(() => {
@@ -382,6 +384,16 @@ const AIChatAssistant = () => {
         </div>
       </div>
 
+      {/* 📡 OFFLINE WARNING BANNER */}
+      {isOffline && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-900 rounded-2xl flex items-center space-x-3 text-xs text-amber-900 dark:text-amber-300 shadow-xs">
+          <span className="text-base">📡</span>
+          <p className="font-semibold">
+            AI Health Sahayak requires an active internet connection to generate clinical guidance. You can still view your saved prescriptions and medication schedules in offline mode.
+          </p>
+        </div>
+      )}
+
       {/* 💊 PRESCRIPTION CONTEXT BAR WITH CAMERA & FILE UPLOAD */}
       <div className="p-4 bg-teal-50 dark:bg-slate-800/90 border border-teal-200/80 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center space-x-2.5">
@@ -558,18 +570,18 @@ const AIChatAssistant = () => {
               type="text"
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Ask about your tablets, food timings, or symptoms..."
-              disabled={loading}
-              className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+              placeholder={isOffline ? "AI Sahayak is offline. Connect to internet to ask questions..." : "Ask about your tablets, food timings, or symptoms..."}
+              disabled={loading || isOffline}
+              className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-teal-500 font-medium disabled:opacity-60"
             />
 
             <Button
               type="submit"
               variant="primary"
               size="md"
-              disabled={!inputQuery.trim() || loading}
+              disabled={!inputQuery.trim() || loading || isOffline}
               icon={FaPaperPlane}
-              className="px-5 py-3 rounded-2xl font-bold text-xs"
+              className="px-5 py-3 rounded-2xl font-bold text-xs disabled:opacity-50"
             >
               Send
             </Button>

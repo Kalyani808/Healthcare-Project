@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import FloatingVoiceAssistant from '../components/common/FloatingVoiceAssistant';
+import OfflineBanner from '../components/common/OfflineBanner';
 
 const DashboardLayout = () => {
   return (
@@ -14,6 +15,7 @@ const DashboardLayout = () => {
         </main>
       </div>
       <FloatingVoiceAssistant />
+      <OfflineBanner />
       <Footer />
     </div>
   );

@@ -51,6 +51,7 @@ const UploadDocument = () => {
   const [isExtendedProcessing, setIsExtendedProcessing] = useState(false);
   const [syncingReminders, setSyncingReminders] = useState(false);
   const [syncedCount, setSyncedCount] = useState(null);
+  const [isDuplicateNotice, setIsDuplicateNotice] = useState(false);
 
   // Active View Mode (Auto-detected from OCR or toggled by user)
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'audio_transcript', 'raw_ocr'
@@ -167,6 +168,52 @@ const UploadDocument = () => {
         window.speechSynthesis.cancel();
       }
     };
+  }, []);
+
+  // Auto-load saved document from PostgreSQL if docId is passed in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const docIdParam = params.get('docId') || params.get('id');
+    if (docIdParam) {
+      const loadSavedDoc = async () => {
+        setUploading(true);
+        setStageText('Loading saved medical document from vault...');
+        try {
+          const res = await api.get(`/api/documents/${docIdParam}/extraction-status/`);
+          const statusData = res.data;
+          setActiveDocId(docIdParam);
+          setUploading(false);
+
+          if (statusData && (statusData.status === 'complete' || statusData.medicines || statusData.extracted_text)) {
+            const isLab = statusData.doc_classification === 'lab_report' ||
+                          (statusData.lab_report && statusData.lab_report.is_lab_report);
+
+            setAnalyzed({
+              extracted_text: statusData.raw_ocr_text || statusData.extracted_text || statusData.text || '',
+              doc_classification: statusData.doc_classification || (isLab ? 'lab_report' : 'prescription'),
+              medicines: Array.isArray(statusData.medicines) ? statusData.medicines : [],
+              lab_report: statusData.lab_report || null,
+              needs_verification: Array.isArray(statusData.needs_verification) ? statusData.needs_verification : [],
+              medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
+              audio_script: statusData.audio_script || '',
+              audio_scripts: statusData.audio_scripts || null,
+              confidence: statusData.confidence || 0.95,
+              extraction_method: statusData.extraction_method || 'Vault Saved Result',
+              quality_metrics: statusData.quality_metrics || {},
+              requires_review: statusData.requires_manual_review,
+            });
+
+            if (statusData.file_url || statusData.file) {
+              setPreview(statusData.file_url || statusData.file);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load saved document:', err);
+          setUploading(false);
+        }
+      };
+      loadSavedDoc();
+    }
   }, []);
 
   const handleSyncToReminders = async () => {
@@ -388,8 +435,41 @@ const UploadDocument = () => {
       const response = await api.post('/api/documents/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const docId = response.data.id;
+      const docData = response.data;
+      const docId = docData.id;
       setActiveDocId(docId);
+
+      // Check if duplicate document was detected and reused from PostgreSQL
+      if (docData.is_duplicate || docData.status === 'completed') {
+        console.log('[DUPLICATE REUSE] Reusing saved extraction data from PostgreSQL for document #' + docId);
+        setProgress(100);
+        setStageText('Prescription already uploaded — using previously extracted results.');
+        setUploading(false);
+        setIsExtendedProcessing(false);
+        setIsDuplicateNotice(true);
+
+        const statusData = docData.extracted_data || {};
+        const isLab = statusData.doc_classification === 'lab_report' ||
+                      (statusData.lab_report && statusData.lab_report.is_lab_report);
+
+        setAnalyzed({
+          extracted_text: statusData.raw_ocr_text || statusData.extracted_text || docData.extracted_text || '',
+          doc_classification: statusData.doc_classification || (isLab ? 'lab_report' : 'prescription'),
+          medicines: Array.isArray(statusData.medicines) ? statusData.medicines : [],
+          lab_report: statusData.lab_report || null,
+          needs_verification: Array.isArray(statusData.needs_verification) ? statusData.needs_verification : [],
+          medicines_found: statusData.medicines_found || (statusData.medicines ? statusData.medicines.length : 0),
+          audio_script: statusData.audio_script || '',
+          audio_scripts: statusData.audio_scripts || null,
+          confidence: statusData.confidence || 0.98,
+          extraction_method: statusData.extraction_method || 'PostgreSQL Saved Result (Duplicate Reused)',
+          quality_metrics: statusData.quality_metrics || {},
+          requires_review: statusData.requires_manual_review,
+          db_doc: docData,
+        });
+        return;
+      }
+
       setProgress(50);
       setStageText('Stage 2: Vision OCR scanning text & lab parameters...');
 
@@ -522,6 +602,15 @@ const UploadDocument = () => {
           </div>
         </div>
 
+      {/* 🚀 DUPLICATE REUSE NOTICE ALERT */}
+      {isDuplicateNotice && (
+        <Alert
+          type="info"
+          title="Prescription Already Uploaded"
+          message="This exact prescription document was previously processed and stored in your PostgreSQL vault. Displaying saved clinical extraction results instantly without running OCR/LLM models again."
+        />
+      )}
+
         {/* Dual Mode Switcher Tabs */}
         {analyzed && (hasLabData || hasPrescriptionData) && (
           <div className="flex items-center space-x-2 pt-4 mt-4 border-t border-slate-800/80">
@@ -610,36 +699,29 @@ const UploadDocument = () => {
                 />
 
                 {preview ? (
-                  <div className="space-y-3">
+                  <div className="relative space-y-3">
+                    {/* Top Right External Link Button (z-20 layer to bypass file input overlay) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const imgUrl = preview || analyzed?.file_url || analyzed?.file;
+                        openImageInNewTab(imgUrl);
+                      }}
+                      className="absolute -top-2 -right-2 z-20 p-2 bg-slate-900/90 hover:bg-teal-600 text-white rounded-xl shadow-lg border border-slate-700 backdrop-blur-sm transition-all hover:scale-110"
+                      title="Open document image in new tab"
+                    >
+                      <FaExternalLinkAlt className="text-xs" />
+                    </button>
+
                     <img
                       src={preview}
                       alt="Prescription preview"
                       className="max-h-48 mx-auto rounded-xl shadow-md border border-slate-200 dark:border-slate-700 object-contain cursor-pointer hover:opacity-90 transition-opacity"
                       onClick={() => setIsImageModalOpen(true)}
                     />
-                    <div className="flex items-center justify-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
-                        className="px-3 py-1 bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-400 rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-teal-200 dark:border-slate-700 hover:bg-teal-100 transition-colors"
-                      >
-                        <FaEye /> <span>View Image</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const imgUrl = preview || analyzed?.file_url || analyzed?.file;
-                          openImageInNewTab(imgUrl);
-                        }}
-                        className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors"
-                        title="Open document image in new tab"
-                      >
-                        <FaExternalLinkAlt className="text-xs" />
-                      </button>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-400">Click image or button to view full screen</p>
+                    <p className="text-[11px] font-bold text-slate-400">Click image for preview modal or icon for new tab</p>
                   </div>
                 ) : (
                   <div className="space-y-2">

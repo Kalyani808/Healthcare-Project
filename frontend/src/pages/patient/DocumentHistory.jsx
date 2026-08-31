@@ -49,6 +49,18 @@ const DocumentHistory = () => {
     return matchesSearch;
   });
 
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this document from your vault?')) {
+      try {
+        await api.delete(`/api/documents/${id}/`);
+        setDocuments((prev) => prev.filter((d) => d.id !== id));
+      } catch (err) {
+        console.error('Failed to delete document:', err);
+        alert('Failed to delete document. Please try again.');
+      }
+    }
+  };
+
   const openImageInNewTab = (imgUrl) => {
     if (!imgUrl) return;
     const imageWindow = window.open('', '_blank');
@@ -214,9 +226,9 @@ const DocumentHistory = () => {
                 )}
 
                 <Link
-                  to="/patient/upload-document"
+                  to={`/patient/upload-document?docId=${doc.id}`}
                   className="py-1.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs transition-all"
-                  title="Re-analyze document"
+                  title="View Saved Clinical Analysis"
                 >
                   <FaMicroscope />
                 </Link>
@@ -262,6 +274,25 @@ const DocumentHistory = () => {
                   alt="Full Document"
                   className="max-h-[320px] max-w-full object-contain rounded-lg"
                 />
+              </div>
+            )}
+
+            {selectedDoc.extracted_data?.medicines?.length > 0 && (
+              <div className="space-y-1.5">
+                <h5 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase">Saved Medicines & Dosages (PostgreSQL):</h5>
+                <div className="p-3 bg-teal-50/50 dark:bg-slate-900/60 rounded-xl border border-teal-200/50 dark:border-slate-800 space-y-2 max-h-48 overflow-y-auto">
+                  {selectedDoc.extracted_data.medicines.map((med, idx) => (
+                    <div key={idx} className="text-xs flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg shadow-xs border border-slate-100 dark:border-slate-700">
+                      <div>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{med.medicine_name || med.name}</span>
+                        <span className="text-[11px] text-teal-600 dark:text-teal-400 block font-medium">{med.dosage} ({med.frequency})</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 rounded">
+                        {med.duration || 'As prescribed'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

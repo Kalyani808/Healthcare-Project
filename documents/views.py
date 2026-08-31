@@ -8,6 +8,19 @@ from .icr_extractor import assess_image_quality
 from .icr_processor import extract_medicines_with_ollama_fallback
 
 
+import hashlib
+
+
+def calculate_file_hash(file_obj):
+    """Calculates SHA-256 hash of an uploaded file object."""
+    hasher = hashlib.sha256()
+    file_obj.seek(0)
+    for chunk in iter(lambda: file_obj.read(4096), b""):
+        hasher.update(chunk)
+    file_obj.seek(0)
+    return hasher.hexdigest()
+
+
 class MedicalDocumentViewSet(viewsets.ModelViewSet):
     serializer_class = MedicalDocumentSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -20,6 +33,81 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # each user only sees their own documents
         return MedicalDocument.objects.filter(user=self.request.user).order_by('-uploaded_at')
+
+    def create(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get('file')
+        file_hash = None
+
+        if uploaded_file:
+            file_hash = calculate_file_hash(uploaded_file)
+            print(f"[DUPLICATE CHECK] Calculated file hash: {file_hash}")
+
+            # 1. Search for existing completed document with same user + same file_hash
+            existing_doc = MedicalDocument.objects.filter(
+                user=request.user,
+                file_hash=file_hash,
+                status__in=['completed', 'text_extracted', 'translated']
+            ).order_by('-uploaded_at').first()
+
+            # 2. Check legacy records missing file_hash if no direct hash match
+            if not existing_doc:
+                legacy_docs = MedicalDocument.objects.filter(
+                    user=request.user,
+                    status__in=['completed', 'text_extracted', 'translated'],
+                    file_hash__isnull=True
+                ).order_by('-uploaded_at')[:15]
+
+                for leg in legacy_docs:
+                    if leg.file and os.path.exists(leg.file.path):
+                        try:
+                            with open(leg.file.path, 'rb') as f:
+                                leg_hash = hashlib.sha256(f.read()).hexdigest()
+                                leg.file_hash = leg_hash
+                                leg.save(update_fields=['file_hash'])
+                                if leg_hash == file_hash and leg.extracted_data and isinstance(leg.extracted_data, dict) and leg.extracted_data.get('status') == 'complete':
+                                    existing_doc = leg
+                                    break
+                        except Exception as leg_err:
+                            print(f"[DUPLICATE CHECK] Error checking legacy document #{leg.id}: {leg_err}")
+
+            # 3. If reusable completed document is found, reuse PostgreSQL results without running extraction again
+            if existing_doc and existing_doc.extracted_data and isinstance(existing_doc.extracted_data, dict) and existing_doc.extracted_data.get('status') == 'complete':
+                print(f"[DUPLICATE CHECK] Existing completed document found: #{existing_doc.id}")
+                print(f"[DUPLICATE CHECK] Reusing saved extraction data")
+
+                doc_name = request.data.get('document_name') or existing_doc.document_name
+                new_doc = MedicalDocument.objects.create(
+                    user=request.user,
+                    document_name=doc_name,
+                    document_type=existing_doc.document_type or 'image',
+                    file=uploaded_file,
+                    status='completed',
+                    extracted_text=existing_doc.extracted_text or '',
+                    extracted_data=existing_doc.extracted_data or {},
+                    file_hash=file_hash
+                )
+
+                serializer = self.get_serializer(new_doc)
+                res_data = serializer.data
+                res_data['is_duplicate'] = True
+                res_data['is_reused'] = True
+                res_data['reused_from_id'] = existing_doc.id
+                res_data['message'] = "Prescription already uploaded. Using previously extracted results."
+                return Response(res_data, status=status.HTTP_201_CREATED)
+
+            print(f"[DUPLICATE CHECK] No previous completed document found for hash {file_hash}")
+            print(f"[EXTRACTION] Starting new extraction flow")
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+
+        if file_hash and serializer.instance:
+            serializer.instance.file_hash = file_hash
+            serializer.instance.save(update_fields=['file_hash'])
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

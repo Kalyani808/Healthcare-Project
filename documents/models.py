@@ -33,6 +33,7 @@ class MedicalDocument(models.Model):
     extracted_text = models.TextField(blank=True)
     extracted_data = models.JSONField(default=dict, blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
+    file_hash = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

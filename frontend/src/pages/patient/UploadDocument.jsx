@@ -80,6 +80,67 @@ const UploadDocument = () => {
   const [isPausedAudio, setIsPausedAudio] = useState(false);
   const audioPlayerRef = useRef(null);
 
+  const openImageInNewTab = (imgUrl) => {
+    if (!imgUrl) return;
+    const imageWindow = window.open('', '_blank');
+    if (imageWindow) {
+      imageWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Prescription Image Viewer - SevaHealth</title>
+            <style>
+              body {
+                margin: 0;
+                background-color: #0f172a;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                font-family: system-ui, -apple-system, sans-serif;
+                color: #e2e8f0;
+              }
+              .header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                padding: 14px 24px;
+                background: rgba(15, 23, 42, 0.9);
+                backdrop-filter: blur(10px);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                z-index: 10;
+              }
+              .title { font-weight: 800; font-size: 15px; color: #2dd4bf; }
+              .sub { font-size: 12px; color: #94a3b8; font-weight: 600; }
+              img {
+                max-width: 92vw;
+                max-height: 85vh;
+                object-fit: contain;
+                border-radius: 16px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+                margin-top: 50px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="title">🏥 SevaHealth Prescription Document Viewer</div>
+              <div class="sub">Full High-Resolution View</div>
+            </div>
+            <img src="${imgUrl}" alt="Prescription Document Image" />
+          </body>
+        </html>
+      `);
+      imageWindow.document.close();
+    }
+  };
+
   // Sync preferred language changes
   useEffect(() => {
     const handleLanguageChange = (e) => {
@@ -570,7 +631,7 @@ const UploadDocument = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           const imgUrl = preview || analyzed?.file_url || analyzed?.file;
-                          if (imgUrl) window.open(imgUrl, '_blank');
+                          openImageInNewTab(imgUrl);
                         }}
                         className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors"
                         title="Open document image in new tab"
@@ -1071,7 +1132,7 @@ const UploadDocument = () => {
                   type="button"
                   onClick={() => {
                     const imgUrl = preview || analyzed?.file_url || analyzed?.file;
-                    if (imgUrl) window.open(imgUrl, '_blank');
+                    openImageInNewTab(imgUrl);
                   }}
                   className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl transition-colors"
                   title="Open image in new tab"

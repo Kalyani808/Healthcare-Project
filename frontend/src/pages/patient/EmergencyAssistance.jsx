@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
@@ -18,7 +18,10 @@ import {
   FaExclamationTriangle,
   FaDirections,
   FaShieldAlt,
-  FaUserNurse
+  FaUserNurse,
+  FaLocationArrow,
+  FaCheckCircle,
+  FaSpinner
 } from 'react-icons/fa';
 
 const EmergencyAssistance = () => {
@@ -26,7 +29,13 @@ const EmergencyAssistance = () => {
   const [firstAidGuides, setFirstAidGuides] = useState([]);
   const [selectedGuide, setSelectedGuide] = useState(null);
   const [selectedFacilityType, setSelectedFacilityType] = useState('all');
-  const [loading, setLoading] = useState(true);
+  
+  // Geolocation & Nearby Facilities state
+  const [userCoords, setUserCoords] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('requesting'); // 'requesting' | 'granted' | 'denied' | 'unavailable'
+  const [loadingFacilities, setLoadingFacilities] = useState(true);
+  const [facilityError, setFacilityError] = useState(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState(null);
   const [sosStatus, setSosStatus] = useState(null);
 
   // Preferred Language for First Aid Speech
@@ -36,46 +45,90 @@ const EmergencyAssistance = () => {
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
+  // 1. Safe Browser Geolocation Acquisition
   useEffect(() => {
-    const fetchEmergencyData = async () => {
-      setLoading(true);
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude
+        });
+        setLocationStatus('granted');
+      },
+      (err) => {
+        console.warn('Geolocation permission error or timeout:', err.message);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationStatus('denied');
+        } else {
+          setLocationStatus('unavailable');
+        }
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }, []);
+
+  // 2. Fetch Nearby Emergency Facilities when Coords or Filters change
+  const fetchFacilities = useCallback(async () => {
+    setLoadingFacilities(true);
+    setFacilityError(null);
+
+    try {
+      const params = {};
+      if (userCoords?.latitude && userCoords?.longitude) {
+        params.latitude = userCoords.latitude;
+        params.longitude = userCoords.longitude;
+      }
+      if (selectedFacilityType && selectedFacilityType !== 'all') {
+        params.type = selectedFacilityType;
+      }
+
+      const res = await api.get('/api/emergency/facilities/nearby/', { params });
+      const facList = res.data.facilities || res.data.results || (Array.isArray(res.data) ? res.data : []);
+      
+      setFacilities(facList);
+      if (facList.length > 0 && !selectedFacilityId) {
+        setSelectedFacilityId(facList[0].id);
+      }
+    } catch (err) {
+      console.error('Error fetching emergency facilities:', err);
+      setFacilityError('Unable to load nearby facilities. Please try again.');
+    } finally {
+      setLoadingFacilities(false);
+    }
+  }, [userCoords, selectedFacilityType]);
+
+  // 3. Fetch First Aid Guides on Mount
+  useEffect(() => {
+    const fetchFirstAid = async () => {
       try {
-        const [facRes, guidesRes] = await Promise.all([
-          api.get('/api/emergency/facilities/'),
-          api.get('/api/emergency/facilities/first-aid/'),
-        ]);
-
-        const facList = facRes.data.results || facRes.data.facilities || facRes.data;
-        setFacilities(Array.isArray(facList) ? facList : []);
-
+        const guidesRes = await api.get('/api/emergency/facilities/first-aid/');
         const guidesList = guidesRes.data.guides || guidesRes.data;
         setFirstAidGuides(Array.isArray(guidesList) ? guidesList : []);
         if (Array.isArray(guidesList) && guidesList.length > 0) {
           setSelectedGuide(guidesList[0]);
         }
       } catch (err) {
-        console.error('Error fetching emergency data:', err);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching first aid guides:', err);
       }
     };
 
-    fetchEmergencyData();
+    fetchFirstAid();
   }, []);
 
+  useEffect(() => {
+    fetchFacilities();
+  }, [fetchFacilities]);
+
+  // SOS Telemetry Dispatch
   const handleTriggerSOS = async () => {
-    if (!navigator.geolocation) {
-      triggerSOSTelemetry(null, null);
-      return;
-    }
+    const lat = userCoords?.latitude || null;
+    const lng = userCoords?.longitude || null;
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => triggerSOSTelemetry(pos.coords.latitude, pos.coords.longitude),
-      () => triggerSOSTelemetry(null, null)
-    );
-  };
-
-  const triggerSOSTelemetry = async (lat, lng) => {
     try {
       const res = await api.post('/api/emergency/facilities/sos-trigger/', {
         latitude: lat,
@@ -87,6 +140,7 @@ const EmergencyAssistance = () => {
     }
   };
 
+  // Text-To-Speech for First Aid Guides
   const speakFirstAidGuide = (guide) => {
     if (!guide) return;
     if ('speechSynthesis' in window) {
@@ -117,9 +171,21 @@ const EmergencyAssistance = () => {
     setIsPlayingAudio(false);
   };
 
-  const filteredFacilities = selectedFacilityType === 'all'
-    ? facilities
-    : facilities.filter(f => f.facility_type === selectedFacilityType);
+  // Build Google Maps Directions Link
+  const getGoogleMapsDirectionsUrl = (fac) => {
+    if (!fac) return '#';
+    const dest = (fac.latitude && fac.longitude)
+      ? `${fac.latitude},${fac.longitude}`
+      : encodeURIComponent(`${fac.name} ${fac.address}`);
+
+    if (userCoords?.latitude && userCoords?.longitude) {
+      const origin = `${userCoords.latitude},${userCoords.longitude}`;
+      return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+  };
+
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId) || facilities[0];
 
   return (
     <div className="space-y-6 pb-12">
@@ -332,11 +398,29 @@ const EmergencyAssistance = () => {
                 <div className="w-8 h-8 rounded-xl bg-tealSoft-500 text-white flex items-center justify-center text-base shadow-sm">
                   <FaHospital />
                 </div>
-                <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
-                  Nearby 24/7 Facilities
-                </h2>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
+                    Nearby 24/7 Facilities
+                  </h2>
+                </div>
               </div>
-              <span className="text-xs text-slate-400 font-semibold">Hyderabad Area</span>
+
+              {/* Location Badge */}
+              <div className="flex items-center space-x-1 text-[11px] font-bold">
+                {locationStatus === 'granted' ? (
+                  <span className="inline-flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    <FaLocationArrow className="text-[10px]" />
+                    <span>GPS Active</span>
+                  </span>
+                ) : locationStatus === 'requesting' ? (
+                  <span className="text-slate-400 flex items-center space-x-1">
+                    <FaSpinner className="animate-spin text-[10px]" />
+                    <span>Locating...</span>
+                  </span>
+                ) : (
+                  <span className="text-slate-400">Hyderabad Area</span>
+                )}
+              </div>
             </div>
 
             {/* Facility Type Filter Tabs */}
@@ -353,7 +437,7 @@ const EmergencyAssistance = () => {
                   className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all ${
                     selectedFacilityType === t.id
                       ? 'bg-tealSoft-500 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
                   {t.label}
@@ -361,58 +445,138 @@ const EmergencyAssistance = () => {
               ))}
             </div>
 
-            {/* Facility Cards List */}
-            <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
-              {filteredFacilities.map((fac) => (
-                <div
-                  key={fac.id}
-                  className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2.5 hover:border-tealSoft-400 transition-all shadow-xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm leading-tight">
-                        {fac.name}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-1">
-                        <FaMapMarkerAlt className="text-rose-500 shrink-0" />
-                        <span className="line-clamp-1">{fac.address}</span>
-                      </p>
-                    </div>
-                    {fac.is_24_hours && (
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-md shrink-0">
-                        24/7 OPEN
-                      </span>
-                    )}
-                  </div>
-
-                  {fac.available_services && (
-                    <p className="text-[11px] text-tealSoft-700 dark:text-tealSoft-400 font-medium">
-                      ✓ {fac.available_services}
-                    </p>
+            {/* Selected Hospital Directions Header Action Banner */}
+            {selectedFacility && (
+              <div className="p-3.5 bg-tealSoft-50 dark:bg-tealSoft-950/40 rounded-2xl border border-tealSoft-200 dark:border-tealSoft-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-tealSoft-800 dark:text-tealSoft-300 tracking-wider flex items-center space-x-1">
+                    <FaCheckCircle className="text-emerald-500" />
+                    <span>Selected Facility</span>
+                  </span>
+                  {selectedFacility.distance_formatted && (
+                    <span className="text-[10px] font-bold bg-tealSoft-200 dark:bg-tealSoft-800 text-tealSoft-900 dark:text-tealSoft-100 px-2 py-0.5 rounded-md">
+                      📍 {selectedFacility.distance_formatted}
+                    </span>
                   )}
-
-                  {/* Actions: Call & Directions */}
-                  <div className="flex items-center space-x-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
-                    <a
-                      href={`tel:${fac.emergency_hotline || fac.phone_number}`}
-                      className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-all"
-                    >
-                      <FaPhoneAlt className="text-[10px]" />
-                      <span>Call {fac.emergency_hotline || fac.phone_number}</span>
-                    </a>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fac.name + ' ' + fac.address)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="py-1.5 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1 transition-all"
-                      title="Open Google Maps Directions"
-                    >
-                      <FaDirections /> <span>Directions</span>
-                    </a>
-                  </div>
                 </div>
-              ))}
-            </div>
+                <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 line-clamp-1">
+                  {selectedFacility.name}
+                </h3>
+                <a
+                  href={getGoogleMapsDirectionsUrl(selectedFacility)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-2 bg-tealSoft-600 hover:bg-tealSoft-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
+                >
+                  <FaDirections className="text-sm" />
+                  <span>GET GOOGLE MAPS DIRECTIONS</span>
+                </a>
+              </div>
+            )}
+
+            {/* Facility Cards List & States */}
+            {loadingFacilities ? (
+              <div className="p-8 text-center space-y-2 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <FaSpinner className="animate-spin text-tealSoft-500 text-2xl mx-auto" />
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  Finding nearby facilities...
+                </p>
+              </div>
+            ) : facilityError ? (
+              <div className="p-6 text-center space-y-3 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-200 dark:border-rose-900">
+                <FaExclamationTriangle className="text-rose-500 text-xl mx-auto" />
+                <p className="text-xs font-bold text-rose-700 dark:text-rose-300">
+                  {facilityError}
+                </p>
+                <button
+                  onClick={fetchFacilities}
+                  className="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-rose-700"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : facilities.length === 0 ? (
+              <div className="p-8 text-center space-y-2 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <FaHospital className="text-slate-300 text-3xl mx-auto" />
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  No nearby facilities found.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Try switching filters or expanding your search area.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1 scrollbar-thin">
+                {facilities.map((fac) => {
+                  const isSelected = selectedFacilityId === fac.id;
+                  return (
+                    <div
+                      key={fac.id}
+                      onClick={() => setSelectedFacilityId(fac.id)}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs space-y-2.5 ${
+                        isSelected
+                          ? 'bg-tealSoft-50/70 dark:bg-tealSoft-950/30 border-tealSoft-500 ring-2 ring-tealSoft-500/20'
+                          : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 hover:border-tealSoft-400'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center space-x-1.5">
+                            <h4 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm leading-tight">
+                              {fac.name}
+                            </h4>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-1">
+                            <FaMapMarkerAlt className="text-rose-500 shrink-0" />
+                            <span className="line-clamp-1">{fac.address}</span>
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {fac.is_24_hours && (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-md">
+                              24/7 OPEN
+                            </span>
+                          )}
+                          {fac.distance_formatted && (
+                            <span className="text-[10px] font-bold text-tealSoft-700 dark:text-tealSoft-300 bg-tealSoft-100 dark:bg-tealSoft-950/80 px-1.5 py-0.5 rounded-md">
+                              📍 {fac.distance_formatted}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {fac.available_services && (
+                        <p className="text-[11px] text-tealSoft-700 dark:text-tealSoft-400 font-medium">
+                          ✓ {fac.available_services}
+                        </p>
+                      )}
+
+                      {/* Actions: Call & Google Maps Directions */}
+                      <div className="flex items-center space-x-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                        <a
+                          href={`tel:${fac.emergency_hotline || fac.phone_number}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-all"
+                        >
+                          <FaPhoneAlt className="text-[10px]" />
+                          <span>Call {fac.emergency_hotline || fac.phone_number}</span>
+                        </a>
+                        <a
+                          href={getGoogleMapsDirectionsUrl(fac)}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-1.5 px-3 bg-tealSoft-600 hover:bg-tealSoft-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-sm transition-all"
+                          title="Open Google Maps Directions"
+                        >
+                          <FaDirections /> <span>Directions</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
         </div>
 

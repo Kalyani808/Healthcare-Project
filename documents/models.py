@@ -19,6 +19,8 @@ class MedicalDocument(models.Model):
     STATUS_CHOICES = (
         ('uploaded', 'Uploaded'),
         ('processing', 'Processing'),
+        ('text_extracted', 'Text Extracted'),
+        ('completed', 'Completed'),
         ('translated', 'Translated'),
         ('failed', 'Failed'),
     )
@@ -29,6 +31,7 @@ class MedicalDocument(models.Model):
     file = models.FileField(upload_to='medical_documents/%Y/%m/', validators=[validate_image_file])
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='uploaded')
     extracted_text = models.TextField(blank=True)
+    extracted_data = models.JSONField(default=dict, blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 

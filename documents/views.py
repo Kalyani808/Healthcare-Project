@@ -45,6 +45,17 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Prevent duplicate task execution if document is already processing or completed
+        if document.status in ['processing', 'completed']:
+            return Response(
+                {
+                    "status": "processing" if document.status == 'processing' else "complete",
+                    "document_id": document.id,
+                    "message": f"ICR text extraction task is currently '{document.status}'."
+                },
+                status=status.HTTP_200_OK
+            )
+
         # Update status to processing
         document.status = 'processing'
         document.save()
@@ -77,7 +88,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     def extraction_status(self, request, pk=None):
         """
         GET /api/documents/{id}/extraction-status/
-        Polling endpoint to check background ICR extraction progress with fuzzy medicine details & image quality.
+        Pure 100% read-only polling endpoint to return cached background extraction results.
         """
         document = self.get_object()
 
@@ -101,70 +112,37 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK
             )
 
-        # Assess image quality
-        quality_metrics = {"sharpness": 100, "brightness": 120, "contrast": 50, "image_quality": "high", "reason": "Acceptable image clarity"}
-        if document.file and os.path.exists(document.file.path):
-            quality_metrics = assess_image_quality(document.file.path)
-            print(f"[QUALITY ASSESSMENT] Document #{document.id}: {quality_metrics}")
+        # Serve persisted background extraction payload
+        if document.extracted_data and isinstance(document.extracted_data, dict) and document.extracted_data.get("status"):
+            return Response(document.extracted_data, status=status.HTTP_200_OK)
 
+        # Fallback for legacy documents lacking pre-computed extracted_data payload
         extracted_str = document.extracted_text or ""
-        safe_preview = extracted_str[:200].encode('ascii', errors='ignore').decode('ascii')
-        print(f"\n[MEDICINE EXTRACTION] Document #{document.id}: {document.document_name}")
-        print(f"[OCR OUTPUT] Raw text preview: {safe_preview}")
-
-        from .services.mistral_extraction_service import MistralExtractionService
-        from .services.medicine_info_service import MedicineInfoService
-        from .services.audio_service import AudioService
-        from .services.lab_report_service import detect_document_classification, extract_lab_test_parameters
-
-        doc_classification = detect_document_classification(extracted_str)
-
-        mistral_service = MistralExtractionService()
-        raw_meds, method = mistral_service.extract_medicines(extracted_str)
-
-        # Hard confidence gate (>= 0.75 confidence and valid non-null name)
-        confident_medicines, needs_verification_data = MedicineInfoService.process_and_gate_medicines(raw_meds)
-
-        # Extract structured Lab & Diagnostic Test Parameters
-        lab_data = extract_lab_test_parameters(extracted_str)
-
-        # Generate multilingual audio scripts (Prescription or Lab Report)
-        if doc_classification == 'lab_report' and lab_data.get('is_lab_report'):
-            en_script = lab_data.get('audio_script', '')
-            audio_scripts = lab_data.get('audio_scripts', {})
-        else:
-            en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
-
-        print(f"[{method.upper()} RESULT] Doc Classification: {doc_classification} | Meds: {len(confident_medicines)} | Lab Params: {lab_data.get('param_count', 0)}")
-
-        medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in confident_medicines]
-        avg_conf = float(sum(m.get('confidence', 0.8) for m in confident_medicines) / len(confident_medicines)) if confident_medicines else (0.90 if lab_data.get('is_lab_report') else 0.50)
-
         return Response(
             {
                 "status": "complete",
                 "document_id": document.id,
-                "doc_classification": doc_classification,
-                "medicines_found": len(confident_medicines),
-                "medicines": confident_medicines,
-                "needs_verification": needs_verification_data,
-                "medicines_only": medicines_only_strings,
-                "lab_report": lab_data,
-                "audio_script": en_script,
-                "audio_scripts": audio_scripts,
-                "extraction_method": method,
-                "quality_metrics": quality_metrics,
-                "image_quality": quality_metrics.get("image_quality", "medium"),
-                "quality_reason": quality_metrics.get("reason", ""),
-                "confidence": round(avg_conf, 2),
-                "num_lines": len(confident_medicines) + lab_data.get('param_count', 0),
-                "lines": [{"text": m} for m in medicines_only_strings],
+                "doc_classification": "prescription",
+                "medicines_found": 0,
+                "medicines": [],
+                "needs_verification": [],
+                "medicines_only": [],
+                "lab_report": {"is_lab_report": False, "parameters": [], "param_count": 0},
+                "audio_script": "",
+                "audio_scripts": {},
+                "extraction_method": "text_extracted_legacy",
+                "quality_metrics": {},
+                "image_quality": "medium",
+                "quality_reason": "",
+                "confidence": 0.50,
+                "num_lines": 0,
+                "lines": [],
                 "text": extracted_str,
                 "extracted_text": extracted_str,
                 "raw_ocr_text": extracted_str,
                 "is_handwritten_detected": True,
-                "requires_manual_review": len(confident_medicines) == 0 and not lab_data.get('is_lab_report'),
-                "issues": "Document analyzed successfully" if (len(confident_medicines) > 0 or lab_data.get('is_lab_report')) else "No medicines or lab parameters identified from document."
+                "requires_manual_review": True,
+                "issues": "Legacy text extracted without saved payload."
             },
             status=status.HTTP_200_OK
         )
@@ -182,23 +160,30 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         elif lang.startswith('mr'): lang = 'mr'
         else: lang = 'en'
 
-        from .services.mistral_extraction_service import MistralExtractionService
-        from .services.medicine_info_service import MedicineInfoService
-        from .services.audio_service import AudioService
-        from .services.lab_report_service import detect_document_classification, extract_lab_test_parameters
+        script_text = ""
+        # Prefer pre-computed cached audio script from document.extracted_data
+        if document.extracted_data and isinstance(document.extracted_data, dict):
+            audio_scripts = document.extracted_data.get('audio_scripts', {})
+            script_text = audio_scripts.get(lang) or document.extracted_data.get('audio_script', '')
 
-        extracted_str = document.extracted_text or ""
-        doc_classification = detect_document_classification(extracted_str)
+        if not script_text:
+            from .services.mistral_extraction_service import MistralExtractionService
+            from .services.medicine_info_service import MedicineInfoService
+            from .services.audio_service import AudioService
+            from .services.lab_report_service import detect_document_classification, extract_lab_test_parameters
 
-        if doc_classification == 'lab_report':
-            lab_data = extract_lab_test_parameters(extracted_str)
-            script_text = lab_data.get('audio_scripts', {}).get(lang) or lab_data.get('audio_script', '')
-        else:
-            mistral_service = MistralExtractionService()
-            raw_meds, _ = mistral_service.extract_medicines(extracted_str)
-            confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
-            _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
-            script_text = audio_scripts.get(lang, "")
+            extracted_str = document.extracted_text or ""
+            doc_classification = detect_document_classification(extracted_str)
+
+            if doc_classification == 'lab_report':
+                lab_data = extract_lab_test_parameters(extracted_str)
+                script_text = lab_data.get('audio_scripts', {}).get(lang) or lab_data.get('audio_script', '')
+            else:
+                mistral_service = MistralExtractionService()
+                raw_meds, _ = mistral_service.extract_medicines(extracted_str)
+                confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
+                _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+                script_text = audio_scripts.get(lang, "")
 
         from .audio_generator import generate_audio_for_text
         audio_bytes = generate_audio_for_text(script_text, lang=lang)
@@ -270,26 +255,23 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         elif lang.startswith('mr'): lang = 'mr'
         else: lang = 'en'
 
-        # If user is authenticated and no explicit prescription context was passed, automatically attach their active medicines
-        if not prescription_context and request.user and request.user.is_authenticated:
+        # Retrieve authenticated user's latest completed MedicalDocument context
+        prescription_context = None
+        if request.user and request.user.is_authenticated:
             try:
-                from reminders.models import MedicationSchedule
-                schedules = MedicationSchedule.objects.filter(user=request.user, is_active=True)
-                if schedules.exists():
-                    prescription_context = {
-                        "active_medicines": [
-                            {
-                                "name": s.medicine_name,
-                                "dosage": s.dosage,
-                                "timing": s.food_timing,
-                                "frequency": s.frequency,
-                                "instructions": s.instructions or s.usage_summary
-                            }
-                            for s in schedules
-                        ]
-                    }
+                latest_doc = MedicalDocument.objects.filter(
+                    user=request.user,
+                    status='completed'
+                ).order_by('-uploaded_at').first()
+
+                if latest_doc and latest_doc.extracted_data:
+                    prescription_context = latest_doc.extracted_data
             except Exception as e:
-                logger.warning(f"Failed to auto-fetch prescription context: {e}")
+                logger.warning(f"Failed to auto-fetch latest completed MedicalDocument context: {e}")
+
+        # Fallback to request payload if authenticated user has no completed document or user is unauthenticated
+        if not prescription_context:
+            prescription_context = request.data.get('prescription_context') or {}
 
         from .services.chat_assistant_service import AIChatService
         result = AIChatService.generate_chat_response(

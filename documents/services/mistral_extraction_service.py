@@ -58,28 +58,28 @@ class MistralExtractionService:
         if not raw_ocr_text or not raw_ocr_text.strip():
             return [], "empty_ocr_text"
 
-        # Check if raw_ocr_text is JSON from Vision LLM
+        # Check if raw_ocr_text contains JSON from Vision LLM
         clean_text = raw_ocr_text.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text.removeprefix("```json").removesuffix("```").strip()
-        elif clean_text.startswith("```"):
-            clean_text = clean_text.removeprefix("```").removesuffix("```").strip()
+        json_start = clean_text.find('{')
+        json_end = clean_text.rfind('}')
 
-        if clean_text.startswith("{") and "medicines" in clean_text:
+        if json_start != -1 and json_end != -1 and json_start < json_end and "medicines" in clean_text[json_start:json_end+1]:
             try:
-                parsed_data = json.loads(clean_text)
+                parsed_data = json.loads(clean_text[json_start:json_end+1])
                 med_list = parsed_data.get("medicines", [])
                 structured_meds = []
                 for item in med_list:
                     med_name = item.get("name") or item.get("medicine") or ""
+                    if not med_name:
+                        continue
                     dosage = item.get("dosage") or item.get("strength") or ""
                     freq = item.get("frequency") or "1-0-1"
                     inst = item.get("instructions") or item.get("timing") or ""
                     conf = float(item.get("confidence") or item.get("confidence_score") or 0.95)
 
                     structured_meds.append({
-                        "name": med_name.capitalize(),
-                        "medicine": med_name.capitalize(),
+                        "name": med_name.title(),
+                        "medicine": med_name.title(),
                         "raw_text": f"{med_name} {dosage} {freq}",
                         "strength": dosage,
                         "dosage": dosage,
@@ -89,12 +89,12 @@ class MistralExtractionService:
                         "confidence": conf,
                         "confidence_label": "High" if conf >= 0.75 else "Medium",
                         "verification_warning": "" if conf >= 0.75 else "Please verify manually",
-                        "info": item.get("info", ""),
+                        "info": item.get("info", f"Prescribed therapeutic medication ({med_name})."),
                     })
                 if structured_meds:
                     return structured_meds, "vision_llm_json_parser"
-            except Exception:
-                pass
+            except Exception as j_err:
+                print(f"[JSON PARSER FALLBACK] {j_err}")
 
         # Check local Ollama Mistral LLM availability
         ollama_avail, models = self.check_ollama_availability()

@@ -6,67 +6,85 @@ class AudioService:
         """
         Translates raw dosage codes like '1-0-1', '1-1-1', '0-0-1' into
         human spoken instructions for English, Hindi, Telugu, and Marathi.
-        Rules: 1 = Take medicine, 0 = Don't take medicine.
         """
         combined = f"{dosage_str or ''} {freq_str or ''}".strip()
-        match = re.search(r'\b(\d+(?:\.\d+)?)\s*[-–—\/]\s*(\d+(?:\.\d+)?)\s*[-–—\/]\s*(\d+(?:\.\d+)?)\b', combined)
+        match = re.search(r'\b([0-9xX]+(?:\.[0-9]+)?)\s*[-–—\/]\s*([0-9xX]+(?:\.[0-9]+)?)\s*[-–—\/]\s*([0-9xX]+(?:\.[0-9]+)?)\b', combined)
 
         if match:
-            m, a, n = float(match.group(1)), float(match.group(2)), float(match.group(3))
-            
-            if m > 0 and a > 0 and n > 0:
+            def parse_val(v_str):
+                if not v_str or v_str.upper() in ('X', '0', '0.0', 'NONE', 'NIL', '-'):
+                    return 0.0
+                try:
+                    return float(v_str)
+                except ValueError:
+                    return 0.0
+
+            def get_qty(count):
+                if count == 1.0:
+                    if lang == 'te': return "ఒక టాబ్లెట్"
+                    if lang == 'hi': return "एक गोली"
+                    if lang == 'mr': return "एक गोळी"
+                    return "one tablet"
+                elif count == 2.0:
+                    if lang == 'te': return "రెండు టాబ్లెట్లు"
+                    if lang == 'hi': return "दो गोलियां"
+                    if lang == 'mr': return "दोन गोळ्या"
+                    return "two tablets"
+                elif count == 0.5:
+                    if lang == 'te': return "అర టాబ్లెట్"
+                    if lang == 'hi': return "आधी गोली"
+                    if lang == 'mr': return "अर्धी गोळी"
+                    return "half tablet"
+                else:
+                    c_str = str(int(count)) if count.is_integer() else str(count)
+                    if lang == 'te': return f"{c_str} టాబ్లెట్లు"
+                    if lang == 'hi': return f"{c_str} गोलियां"
+                    if lang == 'mr': return f"{c_str} गोळ्या"
+                    return f"{c_str} tablets"
+
+            m = parse_val(match.group(1))
+            a = parse_val(match.group(2))
+            n = parse_val(match.group(3))
+
+            parts = []
+            if m > 0:
+                q = get_qty(m)
+                if lang == 'te': parts.append(f"ఉదయం {q}")
+                elif lang == 'hi': parts.append(f"सुबह {q}")
+                elif lang == 'mr': parts.append(f"सकाळी {q}")
+                else: parts.append(f"{q} in the morning")
+
+            if a > 0:
+                q = get_qty(a)
+                if lang == 'te': parts.append(f"మధ్యాహ్నం {q}")
+                elif lang == 'hi': parts.append(f"दोपहर {q}")
+                elif lang == 'mr': parts.append(f"दुपारी {q}")
+                else: parts.append(f"{q} in the afternoon")
+
+            if n > 0:
+                q = get_qty(n)
+                if lang == 'te': parts.append(f"రాత్రి {q}")
+                elif lang == 'hi': parts.append(f"रात {q}")
+                elif lang == 'mr': parts.append(f"రాत्री {q}")
+                else: parts.append(f"{q} at night")
+
+            if parts:
                 if lang == 'te':
-                    return "రోజుకు మూడు సార్లు తీసుకోండి: ఉదయం, మధ్యాహ్నం మరియు రాత్రి."
+                    if len(parts) == 1: return f"{parts[0]} తీసుకోండి."
+                    elif len(parts) == 2: return f"{parts[0]} మరియు {parts[1]} తీసుకోండి."
+                    else: return f"{parts[0]}, {parts[1]} మరియు {parts[2]} తీసుకోండి."
                 elif lang == 'hi':
-                    return "दिन में तीन बार लें: सुबह, दोपहर और रात।"
+                    if len(parts) == 1: return f"{parts[0]} लें।"
+                    elif len(parts) == 2: return f"{parts[0]} और {parts[1]} लें।"
+                    else: return f"{parts[0]}, {parts[1]} और {parts[2]} लें।"
                 elif lang == 'mr':
-                    return "दिवसातून तीन वेळा घ्या: सकाळी, दुपारी आणि रात्री."
-                return "Take three times daily: in the morning, afternoon, and at night."
-            
-            elif m > 0 and a == 0 and n > 0:
-                if lang == 'te':
-                    return "రోజుకు రెండు సార్లు తీసుకోండి: ఉదయం మరియు రాత్రి (మధ్యాహ్నం వద్దు)."
-                elif lang == 'hi':
-                    return "दिन में दो बार लें: सुबह और रात को (दोपहर में नहीं)।"
-                elif lang == 'mr':
-                    return "दिवसातून दोन वेळा घ्या: सकाळी आणि रात्री (दुपारी घेऊ नका)."
-                return "Take two times daily: in the morning and at night. Skip afternoon."
-            
-            elif m > 0 and a > 0 and n == 0:
-                if lang == 'te':
-                    return "రోజుకు రెండు సార్లు తీసుకోండి: ఉదయం మరియు మధ్యాహ్నం."
-                elif lang == 'hi':
-                    return "दिन में दो बार लें: सुबह और दोपहर को।"
-                elif lang == 'mr':
-                    return "दिवसातून दोन वेळा घ्या: सकाळी आणि दुपारी."
-                return "Take two times daily: in the morning and afternoon."
-            
-            elif m > 0 and a == 0 and n == 0:
-                if lang == 'te':
-                    return "రోజుకు ఒకే ఒక్కసారి ఉదయం మాత్రమే తీసుకోండి."
-                elif lang == 'hi':
-                    return "दिन में सिर्फ एक बार सुबह लें।"
-                elif lang == 'mr':
-                    return "दिवसातून फक्त एकदा सकाळी घ्या."
-                return "Take once daily in the morning only."
-            
-            elif m == 0 and a == 0 and n > 0:
-                if lang == 'te':
-                    return "రోజుకు ఒకే ఒక్కసారి రాత్రి పడుకునే ముందు తీసుకోండి."
-                elif lang == 'hi':
-                    return "दिन में सिर्फ एक बार रात को सोने से पहले लें।"
-                elif lang == 'mr':
-                    return "दिवसातून फक्त एकदा रात्री झोपण्यापूर्वी घ्या."
-                return "Take once daily at night before sleep."
-            
-            elif m == 0 and a > 0 and n > 0:
-                if lang == 'te':
-                    return "రోజుకు రెండు సార్లు తీసుకోండి: మధ్యాహ్నం మరియు రాత్రి."
-                elif lang == 'hi':
-                    return "दिन में दो बार लें: दोपहर और रात को।"
-                elif lang == 'mr':
-                    return "दिवसातून दोन वेळा घ्या: दुपारी आणि रात्री."
-                return "Take two times daily: in the afternoon and at night."
+                    if len(parts) == 1: return f"{parts[0]} घ्या."
+                    elif len(parts) == 2: return f"{parts[0]} आणि {parts[1]} घ्या."
+                    else: return f"{parts[0]}, {parts[1]} आणि {parts[2]} घ्या."
+                else:
+                    if len(parts) == 1: return f"Take {parts[0]}."
+                    elif len(parts) == 2: return f"Take {parts[0]} and {parts[1]}."
+                    else: return f"Take {parts[0]}, {parts[1]}, and {parts[2]}."
 
         # Fallback for named abbreviations
         lower = combined.lower()

@@ -105,7 +105,7 @@ TABLET_KNOWLEDGE_BASE = {
         "precautions_mr": "मिठाचा वापर कमी करा. डॉक्टरांच्या सल्ल्याशिवाय गोळी बंद करू नका."
     },
     "azithromycin": {
-        "aliases": ["azithromycin", "azee", "azithral", "azee 500", "అజిత్రోమైసిన్", "एजी", "एजिथ्रोमाइसिन"],
+        "aliases": ["azithromycin", "azee", "azithral", "azee 500", "అజిత్రోమైసిన్", "ఎజీ", "एजिथ्रोमाइसिन"],
         "generic": "Azithromycin (500mg / 250mg) - Azee / Azithral",
         "category": "Macrolide Antibiotic",
         "purpose": "Treats bacterial throat infection, tonsillitis, chest congestion, bronchitis, and typhoid.",
@@ -123,7 +123,7 @@ TABLET_KNOWLEDGE_BASE = {
         "precautions_mr": "पूर्ण ३ किंवा ५ दिवसांचा डोस न चुकता पूर्ण करा."
     },
     "cetirizine": {
-        "aliases": ["cetirizine", "cetzine", "levocetirizine", "levocet", "సెట్రిజిన్", "सेट्रीजीन"],
+        "aliases": ["cetirizine", "cetzine", "levocetirizine", "levocet", "సెట్రిజిన్", "సెట్-రైజిన్", "सेट्रीजीन"],
         "generic": "Cetirizine Hydrochloride (10mg) / Levocetirizine (5mg)",
         "category": "Antihistamine (Anti-Allergy)",
         "purpose": "Relieves runny nose, sneezing, itchy throat, watery eyes, and allergic skin hives.",
@@ -142,27 +142,12 @@ TABLET_KNOWLEDGE_BASE = {
     }
 }
 
-SYSTEM_PROMPT = """You are SevaHealth AI Sahayak, an empathetic, highly knowledgeable clinical healthcare assistant for rural and urban patients in India.
-
-ROLE & CAPABILITIES:
-- Explain prescribed tablets, their active purpose, food timings (empty stomach vs with meals), duration, and safety precautions.
-- Support Indian regional languages naturally: Telugu (తెలుగు), Hindi (हिंदी), Marathi (मराठी), and English.
-- If a patient asks about their prescription or specific tablets (like Augmentin, Pan-D, Dolo, Metformin, Telma, Azithromycin), explain clearly:
-  1. What the medicine is used for (Purpose in plain words).
-  2. How & when to take it (Morning/Afternoon/Night, Before/After Food).
-  3. Dietary precautions (Probiotics for antibiotics, empty stomach for antacids, low salt for BP).
-  4. What to do if they miss a dose.
-
-CRITICAL GUARDRAILS:
-- Always respond in the EXACT same language as the user query (Telugu in Telugu, Hindi in Hindi, etc.).
-- Never change the dosage or cancel a doctor's prescribed medicine.
-- Remind patients to consult their doctor or visit the nearest Primary Health Center (PHC) if severe symptoms occur."""
 
 class AIChatService:
 
     @classmethod
     def match_tablet_knowledge(cls, query_text, lang="en"):
-        """Look up in-memory pharmacology knowledge base with aliases for instant offline matching."""
+        """Look up in-memory pharmacology knowledge base with aliases for offline matching if explicitly needed."""
         q_lower = query_text.lower()
         matched = []
 
@@ -175,7 +160,6 @@ class AIChatService:
         if not matched:
             return None
 
-        # Build clean formatted response
         key, data = matched[0]
         if lang in ["te", "telugu"]:
             return (
@@ -213,42 +197,63 @@ class AIChatService:
     @classmethod
     def generate_chat_response(cls, messages_history, prescription_context=None, user=None, lang="en"):
         start_t = time.time()
-        last_msg = messages_history[-1].get("text", "") if messages_history else ""
+        
+        lang_names = {'te': 'Telugu', 'hi': 'Hindi', 'mr': 'Marathi', 'en': 'English'}
+        lang_name = lang_names.get((lang or 'en').lower(), 'English')
 
-        # 1. Fast Path: In-Memory Clinical Pharmacology Lookup for specific tablets
-        tablet_match = cls.match_tablet_knowledge(last_msg, lang=lang)
-        if tablet_match:
-            elapsed = round(time.time() - start_t, 2)
-            return {
-                "status": "success",
-                "response": tablet_match,
-                "model": "seva-pharmacology-kb",
-                "duration": elapsed,
-                "is_pharmacology_match": True
-            }
+        # Build dynamic clinical system prompt with patient safety guardrails
+        custom_system_prompt = f"""You are SevaHealth AI Sahayak, a professional medical information assistant helping a patient understand their healthcare information.
 
-        # 2. Build Context Prompt with Prescriptions if available
-        context_str = ""
+You have two core responsibilities:
+1. Answer questions about the patient's latest completed prescription using the provided prescription context below.
+2. Answer general medical and health-information questions using your general medical knowledge.
+
+PRESCRIPTION RULES:
+- When the patient asks about their medicines, dosage, frequency, duration, timing, or instructions, use the supplied prescription context.
+- Do not invent prescription information.
+- Do not guess missing dosage, frequency, duration, or medicine names.
+- If the requested information is not present in the prescription context, clearly state that the information is not available in the extracted prescription.
+- Do not silently replace prescription information with general assumptions.
+- Treat low-confidence or `needs_verification` information cautiously.
+- Do not modify or rewrite the patient's prescription.
+- Do not create a new prescription.
+- Do not change the doctor's dosage instructions.
+
+GENERAL QUESTION RULES:
+- General medical questions should be answered normally using general medical knowledge.
+- Do not unnecessarily mention the patient's prescription when the question is unrelated.
+- Explain medical terminology in simple patient-friendly language.
+- Respond in the patient's requested language: {lang_name}.
+
+SAFETY:
+- Do not claim to diagnose a patient from insufficient information.
+- Do not invent patient-specific medical facts.
+- For potentially serious symptoms, recommend appropriate professional medical evaluation.
+- For medication-specific decisions where prescription information is unclear or insufficient, advise the patient to confirm with their doctor or pharmacist.
+"""
+
         if prescription_context:
-            context_str += f"\n\nPATIENT'S ACTIVE PRESCRIPTION CONTEXT:\n{json.dumps(prescription_context, indent=2)}"
+            custom_system_prompt += f"\n\nPATIENT'S LATEST COMPLETED PRESCRIPTION CONTEXT:\n{json.dumps(prescription_context, indent=2)}"
+        else:
+            custom_system_prompt += "\n\nPATIENT'S LATEST COMPLETED PRESCRIPTION CONTEXT: No completed prescription available for this patient."
 
-        custom_system_prompt = SYSTEM_PROMPT + context_str
+        # Format last 10 messages for conversation history context
+        formatted_messages = [{"role": "system", "content": custom_system_prompt}]
+        for msg in (messages_history or [])[-10:]:
+            role = "user" if msg.get("sender") == "user" else "assistant"
+            text = msg.get("text") or msg.get("content") or ""
+            if text.strip():
+                formatted_messages.append({"role": role, "content": text.strip()})
 
-        # 3. Cloud OpenRouter LLM fast path if enabled
-        if PREFER_CLOUD_OCR and OPENROUTER_API_KEY:
+        # 1. Primary Engine: Cloud OpenRouter LLM (Active whenever API key is present)
+        chat_model = os.getenv("OPENROUTER_CHAT_MODEL", "openai/gpt-4o-mini")
+        if OPENROUTER_API_KEY:
             try:
-                formatted_msgs = [{"role": "system", "content": custom_system_prompt}]
-                for msg in messages_history[-6:]:
-                    role = "user" if msg.get("sender") == "user" else "assistant"
-                    text = msg.get("text") or msg.get("content") or ""
-                    if text.strip():
-                        formatted_msgs.append({"role": role, "content": text.strip()})
-
                 payload = {
-                    "model": "openai/gpt-4o-mini",
-                    "messages": formatted_msgs,
+                    "model": chat_model,
+                    "messages": formatted_messages,
                     "temperature": 0.4,
-                    "max_tokens": 450
+                    "max_tokens": 600
                 }
                 
                 req = urllib.request.Request(
@@ -259,24 +264,22 @@ class AIChatService:
                         "Content-Type": "application/json"
                     }
                 )
-                with urllib.request.urlopen(req, timeout=12) as resp:
+                with urllib.request.urlopen(req, timeout=15) as resp:
                     if resp.status == 200:
                         data = json.loads(resp.read().decode("utf-8"))
                         reply = data["choices"][0]["message"]["content"].strip()
                         elapsed = round(time.time() - start_t, 2)
-                        return {"status": "success", "response": reply, "model": "openrouter/gpt-4o-mini", "duration": elapsed}
+                        return {
+                            "status": "success",
+                            "response": reply,
+                            "model": f"openrouter/{chat_model}",
+                            "duration": elapsed
+                        }
             except Exception as e:
-                logger.warning(f"[CHAT OPENROUTER WARN] Cloud chat failed, falling back to local: {e}")
+                logger.warning(f"[CHAT OPENROUTER WARN] OpenRouter chat failed, falling back to local Ollama: {e}")
 
-        # 4. Local Ollama Mistral LLM
+        # 2. Secondary Engine: Local Ollama Mistral LLM Fallback
         url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
-        formatted_messages = [{"role": "system", "content": custom_system_prompt}]
-        for msg in messages_history[-6:]:
-            role = "user" if msg.get("sender") == "user" else "assistant"
-            text = msg.get("text") or msg.get("content") or ""
-            if text.strip():
-                formatted_messages.append({"role": role, "content": text.strip()})
-
         payload = {
             "model": OLLAMA_CHAT_MODEL,
             "messages": formatted_messages,
@@ -300,14 +303,14 @@ class AIChatService:
         except Exception as e:
             logger.error(f"[AI CHAT ERROR] Local Ollama call failed: {str(e)}")
 
-        # 5. Smart Clinical Offline Fallback with Tablet Guidance
+        # 3. Emergency Offline Fallback Text
         if lang in ["te", "telugu"]:
-            fallback = "మీ ప్రిస్క్రిప్షన్‌లోని మందులను డాక్టర్ సూచించిన వేళలకు వేసుకోవాలి. యాంటీబయాటిక్స్ వేసుకున్నప్పుడు పెరుగు లేదా మజ్జిగ తీసుకోండి, అసిడిటీ మందులను ఉదయం ఖాళీ కడుపుతో వేసుకోండి. ఏవైనా తీవ్రమైన నొప్పులు ఉంటే వెంటనే డాక్టర్‌ను సంప్రదించండి."
+            fallback = "మీ ప్రిస్క్రిప్షన్‌లోని మందులను డాక్టర్ సూచించిన వేళలకు వేసుకోవాలి. ఏవైనా సందేహాలు ఉంటే మీ డాక్టర్‌ను లేదా ఫార్మసిస్ట్‌ను సంప్రదించండి."
         elif lang in ["hi", "hindi"]:
-            fallback = "अपनी दवाइयों को डॉक्टर के बताए समय पर ही लें। एंटीबायोटिक के साथ दही या छाछ पिएं और गैस/एसिडिटी की दवा सुबह खाली पेट लें। किसी भी गंभीर तकलीफ में तुरंत नजदीकी डॉक्टर से परामर्श लें।"
+            fallback = "अपनी दवाइयों को डॉक्टर के बताए समय पर ही लें। किसी भी संदेह या तकलीफ की स्थिति में तुरंत अपने डॉक्टर से परामर्श करें।"
         elif lang in ["mr", "marathi"]:
-            fallback = "आपली औषधे डॉक्टरांनी सांगितलेल्या वेळेनुसार वेळेवर घ्या. अ‍ॅसिडिटीची गोळी सकाळी रिकाम्या पोटी घ्या आणि भरपूर पाणी प्या. त्रास वाढल्यास ताबडतोब डॉक्टरांशी संपर्क साधा."
+            fallback = "आपली औषधे डॉक्टरांनी सांगितलेल्या वेळेनुसार वेळेवर घ्या. काही शंका असल्यास डॉक्टरांचा किंवा फार्मसिस्टचा सल्ला घ्या."
         else:
-            fallback = "Take your prescribed medications consistently as directed. Always take antibiotics after meals and antacids 30 mins before breakfast on an empty stomach. Consult your physician for persistent symptoms."
+            fallback = "Take your prescribed medications as directed by your physician. For specific medical questions or unclear instructions, please consult your doctor or pharmacist."
 
         return {"status": "fallback", "response": fallback, "model": "seva-clinical-fallback", "duration": round(time.time() - start_t, 2)}

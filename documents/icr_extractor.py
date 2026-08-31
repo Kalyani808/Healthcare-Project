@@ -230,7 +230,7 @@ class PrescriptionICR:
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "openai/gpt-4o-mini",
+                        "model": os.getenv("OPENROUTER_VISION_MODEL", "openai/gpt-4o-mini"),
                         "messages": [
                             {
                                 "role": "user",
@@ -271,8 +271,16 @@ class PrescriptionICR:
             except Exception as v_err:
                 print(f"[VISION LLM FALLBACK] Falling back to local OCR due to: {v_err}")
 
-        # Step 2b: Local Ollama Vision LLM Model Check (llama3.2-vision, llava, moondream, etc.)
+        # Step 2b: Local Ollama Explicit OCR Model (OLLAMA_OCR_MODEL)
         try:
+            configured_ocr_model = os.getenv("OLLAMA_OCR_MODEL")
+            if not configured_ocr_model:
+                try:
+                    from decouple import config
+                    configured_ocr_model = config("OLLAMA_OCR_MODEL", default="glm-ocr:latest")
+                except Exception:
+                    configured_ocr_model = "glm-ocr:latest"
+
             import socket, urllib.request, base64, json, io
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(0.05)
@@ -283,9 +291,15 @@ class PrescriptionICR:
                     if resp.status == 200:
                         m_data = json.loads(resp.read().decode('utf-8'))
                         m_names = [m.get('name', '') for m in m_data.get('models', [])]
-                        v_models = [m for m in m_names if any(v in m.lower() for v in ['vision', 'llava', 'bakllava', 'moondream'])]
-                        if v_models:
-                            chosen_v_model = v_models[0]
+                        
+                        # Match exact configured model against installed Ollama models
+                        chosen_v_model = None
+                        for m in m_names:
+                            if m == configured_ocr_model or m.split(':')[0] == configured_ocr_model.split(':')[0]:
+                                chosen_v_model = m
+                                break
+
+                        if chosen_v_model:
                             pil_img = Image.open(image_path)
                             if pil_img.mode in ('RGBA', 'P'):
                                 pil_img = pil_img.convert('RGB')
@@ -294,20 +308,23 @@ class PrescriptionICR:
                             pil_img.save(buf, format='JPEG', quality=85)
                             b64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
 
-                            prompt_str = "Extract all prescribed medicines with dosage, frequency, and instructions into JSON: {\"medicines\": [{\"name\": \"...\", \"dosage\": \"...\", \"frequency\": \"...\", \"duration\": \"...\"}]}"
+                            prompt_str = (
+                                "Text Recognition: Transcribe all readable text from this medical prescription image. "
+                                "Preserve medicine names, dosage, frequency, duration, instructions, doctor notes, and other visible text as accurately as possible. "
+                                "Return the recognized text as plain text. Do not invent missing information."
+                            )
                             payload = json.dumps({
                                 "model": chosen_v_model,
                                 "prompt": prompt_str,
                                 "images": [b64_img],
-                                "stream": False,
-                                "format": "json"
+                                "stream": False
                             }).encode('utf-8')
                             vreq = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
                             with urllib.request.urlopen(vreq, timeout=12.0) as vresp:
                                 if vresp.status == 200:
                                     vout = json.loads(vresp.read().decode('utf-8')).get('response', '')
-                                    if vout and 'medicines' in vout:
-                                        print(f"[OLLAMA VISION LLM SUCCESS] Extracted with {chosen_v_model}")
+                                    if vout and len(vout.strip()) > 5:
+                                        print(f"[OLLAMA OCR SUCCESS] Extracted with {chosen_v_model}")
                                         proc_time = round(time.time() - start_time, 2)
                                         return {
                                             "document_id": document_id,

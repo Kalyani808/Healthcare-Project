@@ -22,6 +22,7 @@ import MedicationReminders from '../pages/patient/MedicationReminders';
 import EmergencyAssistance from '../pages/patient/EmergencyAssistance';
 import HealthEducation from '../pages/patient/HealthEducation';
 import AIRecommendations from '../pages/patient/AIRecommendations';
+import DoctorReferrals from '../pages/patient/DoctorReferrals';
 
 import DoctorDashboard from '../pages/doctor/DoctorDashboard';
 import DoctorProfile from '../pages/doctor/DoctorProfile';
@@ -51,20 +52,15 @@ const AppRoutes = () => {
         <Route path="recommendations" element={<AIRecommendations />} />
         <Route path="education" element={<HealthEducation />} />
         <Route path="emergency" element={<EmergencyAssistance />} />
+        <Route path="referrals" element={<DoctorReferrals />} />
         <Route path="document-history" element={<DocumentHistory />} />
         <Route path="ai-assistant" element={<AIChatAssistant />} />
         <Route path="appointments" element={<AppointmentsPage />} />
         <Route path="health-reports" element={<HealthReportsPage />} />
       </Route>
 
-      {/* Doctor Workspace */}
-      <Route path="/doctor" element={<DashboardLayout />}>
-        <Route index element={<Navigate to="/doctor/dashboard" replace />} />
-        <Route path="dashboard" element={<DoctorDashboard />} />
-        <Route path="profile" element={<DoctorProfile />} />
-        <Route path="patients" element={<PatientList />} />
-        <Route path="appointments" element={<AppointmentManagement />} />
-      </Route>
+      {/* Doctor Workspace - Redirect to Patient Workspace */}
+      <Route path="/doctor/*" element={<Navigate to="/patient/dashboard" replace />} />
 
       {/* 404 Fallback */}
       <Route path="*" element={<NotFoundPage />} />

@@ -59,7 +59,7 @@ def run_extraction(document_id):
                 confident_medicines, needs_verification_data = [], []
 
             lab_data = extract_lab_test_parameters(extracted_text)
-            en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
+            en_script, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines, raw_text=extracted_text)
 
         medicines_only_strings = [f"{item.get('name')} {item.get('strength')}".strip() for item in confident_medicines]
         avg_conf = float(sum(m.get('confidence', 0.8) for m in confident_medicines) / len(confident_medicines)) if confident_medicines else (0.90 if lab_data.get('is_lab_report') else 0.50)

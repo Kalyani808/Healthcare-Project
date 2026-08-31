@@ -19,7 +19,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [input, setInput] = useState('');
   const [lang, setLang] = useState(() => {
-    return localStorage.getItem('preferred_language') || 'te-IN';
+    return localStorage.getItem('preferred_language') || 'en-US';
   });
   const messagesEndRef = useRef(null);
   const audioPlayerRef = useRef(null);
@@ -41,7 +41,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
     {
       id: 1,
       sender: 'ai',
-      text: getGreetingForLang(localStorage.getItem('preferred_language') || 'te-IN'),
+      text: getGreetingForLang(localStorage.getItem('preferred_language') || 'en-US'),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -49,22 +49,30 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
   // Sync with global language changes
   useEffect(() => {
     const handleLangChange = (e) => {
-      if (e.detail?.lang && e.detail.lang !== lang) {
-        setLang(e.detail.lang);
-        setMessages(prev => [
-          ...prev,
-          {
-            id: Date.now(),
-            sender: 'ai',
-            text: getGreetingForLang(e.detail.lang),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      const newLang = e.detail?.lang;
+      if (newLang) {
+        setLang(newLang);
+        setMessages((prev) => {
+          const greeting = getGreetingForLang(newLang);
+          // Check if last message is already greeting in this language
+          if (prev.length > 0 && prev[prev.length - 1].text === greeting) {
+            return prev;
           }
-        ]);
+          return [
+            ...prev,
+            {
+              id: Date.now(),
+              sender: 'ai',
+              text: greeting,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ];
+        });
       }
     };
     window.addEventListener('language-changed', handleLangChange);
     return () => window.removeEventListener('language-changed', handleLangChange);
-  }, [lang]);
+  }, []);
 
   const getSuggestedQuestions = () => {
     switch (lang) {
@@ -145,11 +153,57 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
     return () => window.removeEventListener('open-voice-assistant', handleOpenAssistant);
   }, []);
 
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
 
-  // Local Offline Whisper Voice Recognition via MediaRecorder API
+  // High-performance Multilingual Speech-to-Text Recognition
   const toggleVoiceListening = async () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      if (isListening) {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch (e) {}
+        }
+        setIsListening(false);
+        return;
+      }
+
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = lang || 'te-IN';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInput(transcript);
+        };
+
+        recognition.onerror = (err) => {
+          console.warn('Speech recognition error:', err);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        return;
+      } catch (err) {
+        console.warn('Web Speech API start error, falling back to MediaRecorder:', err);
+      }
+    }
+
+    // Fallback to MediaRecorder API if Web Speech API is unavailable
     if (isListening) {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
@@ -159,7 +213,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
     }
 
     if (!navigator.mediaDevices || !window.MediaRecorder) {
-      alert('Audio recording is not supported in this browser. Please use Chrome or Edge.');
+      alert('Audio recording is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return;
     }
 
@@ -189,10 +243,10 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
             if (res.data?.status === 'success' && res.data?.text) {
               setInput(res.data.text);
             } else if (res.data?.status === 'no_speech') {
-              alert('No speech detected in recorded audio. Please try speaking into your mic again.');
+              alert('No speech detected. Please speak clearly into your microphone.');
             }
           } catch (err) {
-            console.error('Whisper transcription error:', err);
+            console.error('Transcription error:', err);
           } finally {
             setIsTyping(false);
           }
@@ -206,7 +260,7 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
       console.error('Microphone error:', err);
       setIsListening(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert('Microphone access denied. Please allow microphone permission in your browser.');
+        alert('Microphone access denied. Please allow microphone permission in browser.');
       }
     }
   };
@@ -331,15 +385,6 @@ const FloatingVoiceAssistant = ({ prescriptionContext = null }) => {
                   setLang(newLang);
                   localStorage.setItem('preferred_language', newLang);
                   window.dispatchEvent(new CustomEvent('language-changed', { detail: { lang: newLang } }));
-                  setMessages(prev => [
-                    ...prev,
-                    {
-                      id: Date.now(),
-                      sender: 'ai',
-                      text: getGreetingForLang(newLang),
-                      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    }
-                  ]);
                 }}
                 className="text-[11px] bg-white/20 text-white rounded-lg px-2 py-1 font-semibold outline-none cursor-pointer border border-white/30"
                 title="Select Voice Language"

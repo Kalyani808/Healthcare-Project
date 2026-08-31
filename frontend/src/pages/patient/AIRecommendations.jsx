@@ -28,9 +28,9 @@ const AIRecommendations = () => {
   const [loading, setLoading] = useState(true);
   const [completingId, setCompletingId] = useState(null);
 
-  // Preferred Language: 'te', 'hi', 'mr', 'en'
+  // Preferred Language: 'en', 'te', 'hi', 'mr'
   const [lang, setLang] = useState(() => {
-    return localStorage.getItem('preferred_language') || 'te';
+    return localStorage.getItem('preferred_language') || 'en';
   });
 
   const fetchData = async () => {

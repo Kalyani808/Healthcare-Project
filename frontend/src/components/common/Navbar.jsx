@@ -322,6 +322,16 @@ const Navbar = () => {
                       </div>
                     </Link>
                     <Link
+                      to="/patient/referrals"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaUserMd className="text-teal-600" />
+                      <div>
+                        <span className="block">Doctor Referrals & Finder</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Verified urban specialists network</span>
+                      </div>
+                    </Link>
+                    <Link
                       to="/patient/ai-assistant"
                       className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
                     >
@@ -496,6 +506,7 @@ const Navbar = () => {
               
               <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Medical Support</div>
               <Link to="/patient/appointments" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Doctor Appointments</Link>
+              <Link to="/patient/referrals" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400">Doctor Referrals & Finder</Link>
               <Link to="/patient/ai-assistant" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Voice Health Sahayak</Link>
               <Link to="/patient/emergency" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-rose-600">🚨 Emergency 108</Link>
               <button onClick={() => { setMobileMenuOpen(false); handleLogout(); }} className="block w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-rose-600">Sign Out</button>

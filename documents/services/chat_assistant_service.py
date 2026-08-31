@@ -201,12 +201,63 @@ class AIChatService:
         lang_names = {'te': 'Telugu', 'hi': 'Hindi', 'mr': 'Marathi', 'en': 'English'}
         lang_name = lang_names.get((lang or 'en').lower(), 'English')
 
+        # Check if query pertains to doctor discovery, doctor referrals, or specialists
+        last_user_query = ""
+        for msg in reversed(messages_history or []):
+            if msg.get("sender") == "user" or msg.get("role") == "user":
+                last_user_query = (msg.get("text") or msg.get("content") or "").lower()
+                break
+
+        provider_context_str = ""
+        referral_context_str = ""
+        is_provider_or_referral_query = False
+
+        doctor_keywords = [
+            "doctor", "specialist", "cardiologist", "neurologist", "nephrologist",
+            "oncologist", "orthopedic", "gastroenterologist", "pulmonologist",
+            "physician", "refer", "referred", "referral", "hospital", "clinic",
+            "consult", "appointment", "directions", "available", "verified"
+        ]
+
+        if any(kw in last_user_query for kw in doctor_keywords):
+            is_provider_or_referral_query = True
+            try:
+                from referrals.services.provider_service import ProviderService
+                
+                # Check for referral inquiry
+                if any(r_kw in last_user_query for r_kw in ["refer", "referred", "referral", "my doctor"]):
+                    referrals = ProviderService.get_patient_referrals(user)
+                    referral_context_str = ProviderService.format_referrals_for_ai(referrals)
+
+                # Check for doctor / specialist inquiry
+                spec_filter = None
+                for spec in ["cardiology", "cardiologist", "neurology", "neurologist", "nephrology", "nephrologist",
+                             "oncology", "oncologist", "orthopedics", "orthopedic", "gastroenterology", "gastroenterologist",
+                             "pulmonology", "pulmonologist", "general medicine"]:
+                    if spec in last_user_query:
+                        # Extract base specialty
+                        spec_filter = spec.replace("ist", "y").replace("ic", "ics")
+                        if spec_filter.endswith("gics"): spec_filter = spec_filter[:-4] + "gy"
+                        break
+
+                city_filter = "hyderabad" if "hyderabad" in last_user_query else None
+                providers = ProviderService.search_providers(
+                    query=last_user_query if not spec_filter else None,
+                    specialization=spec_filter,
+                    city=city_filter,
+                    limit=5
+                )
+                provider_context_str = ProviderService.format_providers_for_ai(providers)
+            except Exception as pe:
+                logger.warning(f"Failed to query ProviderService for AI chat: {pe}")
+
         # Build dynamic clinical system prompt with patient safety guardrails
         custom_system_prompt = f"""You are SevaHealth AI Sahayak, a professional medical information assistant helping a patient understand their healthcare information.
 
-You have two core responsibilities:
+You have three core responsibilities:
 1. Answer questions about the patient's latest completed prescription using the provided prescription context below.
-2. Answer general medical and health-information questions using your general medical knowledge.
+2. Provide verified healthcare provider and doctor referral information using the provided database provider context below.
+3. Answer general medical and health-information questions using your general medical knowledge.
 
 PRESCRIPTION RULES:
 - When the patient asks about their medicines, dosage, frequency, duration, timing, or instructions, use the supplied prescription context.
@@ -218,6 +269,12 @@ PRESCRIPTION RULES:
 - Do not modify or rewrite the patient's prescription.
 - Do not create a new prescription.
 - Do not change the doctor's dosage instructions.
+
+VERIFIED DOCTOR & REFERRAL RULES:
+- When the patient asks about doctors, specialists, hospital directions, availability, or referrals, use ONLY the verified provider/referral database context provided below.
+- Do NOT invent fake doctor names, phone numbers, ratings, qualifications, or hospitals.
+- If no verified provider is found in the database matching the patient's criteria, state: "I couldn't find a verified provider matching those criteria in our directory."
+- Do NOT claim a doctor is objectively "best", "safe", or "guaranteed". Use neutral terminology like "Verified in SevaHealth provider directory", "Available specialist", or "Hospital affiliation".
 
 GENERAL QUESTION RULES:
 - General medical questions should be answered normally using general medical knowledge.
@@ -231,6 +288,12 @@ SAFETY:
 - For potentially serious symptoms, recommend appropriate professional medical evaluation.
 - For medication-specific decisions where prescription information is unclear or insufficient, advise the patient to confirm with their doctor or pharmacist.
 """
+
+        if is_provider_or_referral_query:
+            if referral_context_str:
+                custom_system_prompt += f"\n\nPATIENT'S DOCTOR REFERRALS (DATABASE SOURCE OF TRUTH):\n{referral_context_str}"
+            if provider_context_str:
+                custom_system_prompt += f"\n\nVERIFIED HEALTHCARE PROVIDER DIRECTORY RESULTS (DATABASE SOURCE OF TRUTH):\n{provider_context_str}"
 
         if prescription_context:
             custom_system_prompt += f"\n\nPATIENT'S LATEST COMPLETED PRESCRIPTION CONTEXT:\n{json.dumps(prescription_context, indent=2)}"

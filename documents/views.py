@@ -163,8 +163,9 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
         script_text = ""
         # Prefer pre-computed cached audio script from document.extracted_data
         if document.extracted_data and isinstance(document.extracted_data, dict):
-            audio_scripts = document.extracted_data.get('audio_scripts', {})
-            script_text = audio_scripts.get(lang) or document.extracted_data.get('audio_script', '')
+            audio_scripts = document.extracted_data.get('audio_scripts')
+            if isinstance(audio_scripts, dict):
+                script_text = audio_scripts.get(lang) or document.extracted_data.get('audio_script', '')
 
         if not script_text:
             from .services.mistral_extraction_service import MistralExtractionService
@@ -177,13 +178,30 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
 
             if doc_classification == 'lab_report':
                 lab_data = extract_lab_test_parameters(extracted_str)
-                script_text = lab_data.get('audio_scripts', {}).get(lang) or lab_data.get('audio_script', '')
+                scripts = lab_data.get('audio_scripts', {})
+                if isinstance(scripts, dict):
+                    script_text = scripts.get(lang) or lab_data.get('audio_script', '')
             else:
-                mistral_service = MistralExtractionService()
-                raw_meds, _ = mistral_service.extract_medicines(extracted_str)
-                confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
-                _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines)
-                script_text = audio_scripts.get(lang, "")
+                try:
+                    mistral_service = MistralExtractionService()
+                    raw_meds, _ = mistral_service.extract_medicines(extracted_str)
+                    confident_medicines, _ = MedicineInfoService.process_and_gate_medicines(raw_meds)
+                    _, audio_scripts = AudioService.generate_multilingual_audio_scripts(confident_medicines, raw_text=extracted_str)
+                    if isinstance(audio_scripts, dict):
+                        script_text = audio_scripts.get(lang, "")
+                except Exception as ex:
+                    print(f"[AUDIO GEN FALLBACK] {ex}")
+
+        if not script_text:
+            extracted_str = document.extracted_text or ""
+            if lang == 'te':
+                script_text = f"ప్రిస్క్రిప్షన్ వివరాలు: {extracted_str[:200]}. దయచేసి మీ డాక్టర్ సూచించిన విధంగా మందులను సరైన సమయానికి తీసుకోండి."
+            elif lang == 'hi':
+                script_text = f"पर्चे का विवरण: {extracted_str[:200]}। कृपया अपनी दवाएं डॉक्टर के निर्देशानुसार समय पर लें।"
+            elif lang == 'mr':
+                script_text = f"प्रिस्क्रिप्शन तपशील: {extracted_str[:200]}. कृपया तुमची औषधे वेळेवर आणि डॉक्टरांच्या सल्ल्यानुसार घ्या."
+            else:
+                script_text = f"Prescription Content: {extracted_str[:200]}. Please take your medicines regularly as advised by your doctor."
 
         from .audio_generator import generate_audio_for_text
         audio_bytes = generate_audio_for_text(script_text, lang=lang)

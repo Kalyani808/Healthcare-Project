@@ -17,7 +17,8 @@ import {
   FaPills, 
   FaVial, 
   FaMicroscope, 
-  FaPlus 
+  FaPlus,
+  FaExternalLinkAlt
 } from 'react-icons/fa';
 
 const DocumentHistory = () => {
@@ -151,6 +152,18 @@ const DocumentHistory = () => {
                   <FaEye /> <span>Preview</span>
                 </button>
 
+                {doc.file && (
+                  <a
+                    href={doc.file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-slate-800 rounded-xl transition-all"
+                    title="Open Document in New Tab"
+                  >
+                    <FaExternalLinkAlt className="text-xs" />
+                  </a>
+                )}
+
                 <Link
                   to="/patient/upload-document"
                   className="py-1.5 px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs transition-all"
@@ -212,7 +225,18 @@ const DocumentHistory = () => {
               </div>
             )}
 
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex justify-between items-center pt-2">
+              {selectedDoc.file ? (
+                <a
+                  href={selectedDoc.file}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  <FaExternalLinkAlt className="text-xs" />
+                  <span>Open in New Tab</span>
+                </a>
+              ) : <div />}
               <Button variant="secondary" size="md" onClick={() => setSelectedDoc(null)}>
                 Close Preview
               </Button>

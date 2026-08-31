@@ -21,7 +21,8 @@ import {
   FaUserNurse,
   FaLocationArrow,
   FaCheckCircle,
-  FaSpinner
+  FaSpinner,
+  FaWhatsapp
 } from 'react-icons/fa';
 
 const EmergencyAssistance = () => {
@@ -40,7 +41,7 @@ const EmergencyAssistance = () => {
 
   // Preferred Language for First Aid Speech
   const [lang, setLang] = useState(() => {
-    return localStorage.getItem('preferred_language') || 'te-IN';
+    return localStorage.getItem('preferred_language') || 'en-US';
   });
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -187,6 +188,36 @@ const EmergencyAssistance = () => {
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId) || facilities[0];
 
+  // WhatsApp Emergency Share Handler
+  const handleShareWhatsAppEmergency = () => {
+    let text = `🚨 *SEVAHEALTH EMERGENCY MEDICAL ALERT* 🚨\n\n`;
+    text += `📞 *Emergency Speed Dial Numbers:*\n`;
+    text += `- Ambulance: 108\n`;
+    text += `- National Emergency: 112\n`;
+    text += `- Mother & Child: 102\n`;
+    text += `- Police: 100\n\n`;
+
+    if (selectedFacility) {
+      text += `🏥 *Selected 24/7 Healthcare Facility:*\n`;
+      text += `*${selectedFacility.name}*\n`;
+      text += `📍 Address: ${selectedFacility.address}\n`;
+      text += `📞 Phone: ${selectedFacility.emergency_hotline || selectedFacility.phone_number}\n`;
+      if (selectedFacility.distance_formatted) {
+        text += `📏 Distance: ${selectedFacility.distance_formatted}\n`;
+      }
+      text += `🗺️ Google Maps Directions: ${getGoogleMapsDirectionsUrl(selectedFacility)}\n\n`;
+    }
+
+    if (userCoords?.latitude && userCoords?.longitude) {
+      text += `📍 *Patient Live GPS Location:* https://www.google.com/maps?q=${userCoords.latitude},${userCoords.longitude}\n\n`;
+    }
+
+    text += `📱 _Broadcasted via SevaHealth Emergency Medical Response_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* 🔴 RED EMERGENCY SOS SPEED DIAL BANNER */}
@@ -206,13 +237,23 @@ const EmergencyAssistance = () => {
             </p>
           </div>
 
-          <button
-            onClick={handleTriggerSOS}
-            className="px-6 py-3.5 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-sm sm:text-base rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 shrink-0 border-2 border-yellow-200"
-          >
-            <FaExclamationTriangle className="text-rose-600 text-lg" />
-            <span>DISPATCH SOS & ALERT CONTACTS</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0">
+            <button
+              onClick={handleShareWhatsAppEmergency}
+              className="w-full sm:w-auto px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 border border-emerald-300"
+            >
+              <FaWhatsapp className="text-lg" />
+              <span>Share Alert on WhatsApp</span>
+            </button>
+
+            <button
+              onClick={handleTriggerSOS}
+              className="w-full sm:w-auto px-6 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-black text-xs sm:text-sm rounded-2xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center space-x-2 border-2 border-yellow-200"
+            >
+              <FaExclamationTriangle className="text-rose-600 text-lg" />
+              <span>DISPATCH SOS</span>
+            </button>
+          </div>
         </div>
 
         {/* Speed Dial Numbers Row */}
@@ -307,7 +348,7 @@ const EmergencyAssistance = () => {
                 <option value="te-IN">తెలుగు (Telugu)</option>
                 <option value="en-US">English (Voice)</option>
                 <option value="hi-IN">हिंदी (Hindi)</option>
-                <option value="mr-IN">मराठी (Marathi)</option>
+                <option value="mr-IN">మరాఠీ (Marathi)</option>
               </select>
             </div>
 
@@ -445,7 +486,7 @@ const EmergencyAssistance = () => {
               ))}
             </div>
 
-            {/* Selected Hospital Directions Header Action Banner */}
+            {/* Selected Hospital Directions & WhatsApp Share Header Banner */}
             {selectedFacility && (
               <div className="p-3.5 bg-tealSoft-50 dark:bg-tealSoft-950/40 rounded-2xl border border-tealSoft-200 dark:border-tealSoft-800 space-y-2">
                 <div className="flex items-center justify-between">
@@ -462,15 +503,27 @@ const EmergencyAssistance = () => {
                 <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 line-clamp-1">
                   {selectedFacility.name}
                 </h3>
-                <a
-                  href={getGoogleMapsDirectionsUrl(selectedFacility)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-2 bg-tealSoft-600 hover:bg-tealSoft-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-                >
-                  <FaDirections className="text-sm" />
-                  <span>GET GOOGLE MAPS DIRECTIONS</span>
-                </a>
+                
+                <div className="flex items-center space-x-2 pt-1">
+                  <a
+                    href={getGoogleMapsDirectionsUrl(selectedFacility)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 bg-tealSoft-600 hover:bg-tealSoft-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-1.5"
+                  >
+                    <FaDirections className="text-sm" />
+                    <span>GET DIRECTIONS</span>
+                  </a>
+
+                  <button
+                    onClick={handleShareWhatsAppEmergency}
+                    className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-1 shrink-0"
+                    title="Share Emergency Details on WhatsApp"
+                  >
+                    <FaWhatsapp className="text-base" />
+                    <span>WhatsApp</span>
+                  </button>
+                </div>
               </div>
             )}
 

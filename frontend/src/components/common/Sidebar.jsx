@@ -45,6 +45,7 @@ const Sidebar = () => {
       title: 'Consultations & Emergency',
       links: [
         { to: '/patient/appointments', label: 'Doctor Tele-Consult', icon: FaCalendarAlt },
+        { to: '/patient/referrals', label: 'Doctor Referrals & Finder', icon: FaUserMd, badge: 'Verified' },
         { to: '/patient/ai-assistant', label: 'Voice Health Sahayak', icon: FaRobot, badge: 'Voice' },
         { to: '/patient/emergency', label: '24/7 Emergency 108', icon: FaAmbulance, emergency: true },
       ]

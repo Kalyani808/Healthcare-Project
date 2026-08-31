@@ -120,11 +120,22 @@ class AudioService:
         return combined or "as directed"
 
     @classmethod
-    def generate_multilingual_audio_scripts(cls, medicines_list):
+    def generate_multilingual_audio_scripts(cls, medicines_list, raw_text=""):
         """
         Generates audio guidance scripts summarizing extracted medicines in English, Hindi, Telugu, and Marathi
-        with human-friendly dosage interpretations (1 = Take, 0 = Don't take).
+        with human-friendly dosage interpretations. If medicines_list is empty, uses raw_text as audio script source.
         """
+        if not medicines_list:
+            if raw_text and len(raw_text.strip()) > 5:
+                clean_raw = raw_text.strip().replace('\n', ' ')
+                if len(clean_raw) > 300:
+                    clean_raw = clean_raw[:300] + "..."
+                en_script = f"Prescription Content: {clean_raw}. Please take your medicines regularly as advised by your doctor."
+                hi_script = f"Prescription detail: {clean_raw}. Please take your medicines regularly as advised by your doctor."
+                te_script = f"Prescription detail: {clean_raw}. Please take your medicines regularly as advised by your doctor."
+                mr_script = f"Prescription detail: {clean_raw}. Please take your medicines regularly as advised by your doctor."
+                scripts_dict = {"en": en_script, "hi": hi_script, "te": te_script, "mr": mr_script}
+                return en_script, scripts_dict
         if not medicines_list:
             no_med_msg = {
                 "en": "No medicines could be identified from this prescription. Please consult your doctor or upload a clearer photo.",

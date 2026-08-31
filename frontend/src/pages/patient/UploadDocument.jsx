@@ -33,7 +33,9 @@ import {
   FaNotesMedical,
   FaMicroscope,
   FaChartBar,
-  FaCamera
+  FaCamera,
+  FaWhatsapp,
+  FaExternalLinkAlt
 } from 'react-icons/fa';
 
 const UploadDocument = () => {
@@ -54,8 +56,9 @@ const UploadDocument = () => {
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'audio_transcript', 'raw_ocr'
   const [documentMode, setDocumentMode] = useState('auto'); // 'auto', 'prescription', 'lab_report'
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-  // Preferred Language: Telugu, Hindi, Marathi, English
+  // Preferred Language: English, Telugu, Hindi, Marathi
   const [preferredLang, setPreferredLang] = useState(() => {
     const saved = localStorage.getItem('preferred_language');
     if (saved) {
@@ -64,12 +67,12 @@ const UploadDocument = () => {
       if (saved.startsWith('mr')) return 'mr';
       return 'en';
     }
-    return 'te';
+    return 'en';
   });
 
   const [audioLang, setAudioLang] = useState(() => {
     const saved = localStorage.getItem('preferred_language');
-    return saved || 'te-IN';
+    return saved || 'en-US';
   });
 
   // Audio Playback State
@@ -119,6 +122,51 @@ const UploadDocument = () => {
     } finally {
       setSyncingReminders(false);
     }
+  };
+
+  // WhatsApp Share Handler for Prescriptions & Lab Reports
+  const handleShareWhatsApp = () => {
+    if (!analyzed) return;
+
+    let text = '';
+    const isLab = isLabReportActive && analyzed.lab_report && analyzed.lab_report.parameters;
+
+    if (isLab) {
+      text = `🧪 *SevaHealth - Diagnostic Lab Report Summary*\n`;
+      text += `📄 *Document:* ${docName || 'Lab Report'}\n\n`;
+      text += `📊 *Summary:* Total Tests: ${analyzed.lab_report.param_count || 0} | 🟢 Normal: ${analyzed.lab_report.normal_count || 0} | ⚠️ Attention: ${analyzed.lab_report.abnormal_count || 0}\n\n`;
+      text += `*Key Observations:*\n`;
+      (analyzed.lab_report.parameters || []).forEach((param, idx) => {
+        const statusEmoji = param.status === 'normal' ? '🟢' : '⚠️';
+        text += `${idx + 1}. ${param.name}: ${param.value} ${param.unit || ''} (${statusEmoji} ${param.status_label || param.status})\n`;
+      });
+    } else {
+      text = `🏥 *SevaHealth - Prescription Summary*\n`;
+      text += `📄 *Document:* ${docName || 'Prescription'}\n\n`;
+
+      if (analyzed.medicines && analyzed.medicines.length > 0) {
+        text += `💊 *Prescribed Medicines (${analyzed.medicines.length}):*\n`;
+        analyzed.medicines.forEach((med, idx) => {
+          const name = med.medicine || med.name || 'Medicine';
+          const dosage = med.dosage || med.strength || '';
+          const freq = med.frequency || '';
+          const dur = med.duration || '';
+          text += `${idx + 1}. *${name}* ${dosage ? `- ${dosage}` : ''} ${freq ? `(${freq})` : ''} ${dur ? `for ${dur}` : ''}\n`;
+        });
+      } else {
+        text += `No medicines extracted.\n`;
+      }
+
+      const spokenScript = getAudioScriptForSelectedLang();
+      if (spokenScript) {
+        text += `\n🗣️ *Patient Instructions:* ${spokenScript.slice(0, 250)}...\n`;
+      }
+    }
+
+    text += `\n📱 _Shared via SevaHealth AI Assistant_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   // Determine current audio script for the selected language
@@ -408,7 +456,7 @@ const UploadDocument = () => {
               <option value="te-IN">తెలుగు (Telugu)</option>
               <option value="en-US">English (Voice)</option>
               <option value="hi-IN">हिंदी (Hindi)</option>
-              <option value="mr-IN">मराठी (Marathi)</option>
+              <option value="mr-IN">మరాठी (Marathi)</option>
             </select>
           </div>
         </div>
@@ -449,253 +497,226 @@ const UploadDocument = () => {
                     : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                 }`}
               >
-                <FaVial /> <span>Lab Report ({analyzed.lab_report?.param_count || 0} Tests)</span>
+                <FaVial /> <span>Lab Report ({analyzed.lab_report?.parameters?.length || 0})</span>
               </button>
             )}
           </div>
         )}
       </div>
 
-      {/* 2-COLUMN BALANCED WORKSPACE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {inlineError && (
+        <Alert
+          type="error"
+          message={inlineError}
+          onClose={() => setInlineError(null)}
+        />
+      )}
 
-        {/* LEFT COLUMN (5 Cols): Upload Form + Compact Image Preview + Built-in Audio Bar */}
-        <div className="lg:col-span-5 space-y-4">
-          <Card className="p-5 sm:p-6 bg-white dark:bg-[#1E293B] border border-slate-200/80 dark:border-slate-700/80 shadow-md space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100 font-bold text-base">
-                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center text-sm shadow-sm">
-                  <FaFileUpload />
-                </div>
-                <span>Select & Upload Document</span>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-400">Prescriptions & Lab Tests</span>
-            </div>
+      {/* Extended Processing Alert */}
+      {isExtendedProcessing && (
+        <Alert
+          type="warning"
+          message="Medical extraction is running in the background. You can stay on this page or check your Health Records later for full results."
+        />
+      )}
+
+      {/* 2-COLUMN MAIN WORKSPACE GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* LEFT COLUMN (5 COLS): Upload Box & Document Details */}
+        <div className="lg:col-span-5 space-y-6">
+          <Card className="p-6 bg-white dark:bg-[#1E293B] border border-slate-200/80 dark:border-slate-700 shadow-md space-y-5">
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+              <FaCloudUploadAlt className="text-teal-600 dark:text-teal-400" />
+              <span>Document Upload & Scanner</span>
+            </h2>
 
             <form onSubmit={handleUpload} className="space-y-4">
               <Input
                 label="Document Reference Name"
-                placeholder="e.g. Blood_Test_Report_CBC or Dr_Prescription"
+                placeholder="e.g. Apollo Prescription / Blood Test Jan 2026"
                 value={docName}
                 onChange={(e) => setDocName(e.target.value)}
-                required
               />
 
-              {!preview ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Choose Image Source:</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsCameraOpen(true)}
-                      className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 active:scale-95"
-                    >
-                      <FaCamera className="text-xs" />
-                      <span>Take Photo with Camera</span>
-                    </button>
-                  </div>
+              {/* Upload Dropzone */}
+              <div className="relative border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-teal-500 rounded-2xl p-6 text-center transition-all bg-slate-50/50 dark:bg-slate-900/40 group">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
 
-                  <label className="border-2 border-dashed border-teal-300 dark:border-slate-600 hover:border-teal-500 dark:hover:border-teal-400 bg-teal-50/20 dark:bg-slate-800/40 hover:bg-teal-50/40 dark:hover:bg-slate-800/70 rounded-2xl h-[200px] flex flex-col items-center justify-center cursor-pointer transition-all space-y-2.5 p-5">
-                    <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-slate-700 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xl shadow-sm">
-                      <FaCloudUploadAlt />
-                    </div>
-                    <div className="text-center space-y-0.5">
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Click to browse or drag file here</p>
-                      <p className="text-[10px] text-slate-400">Supports JPG, PNG, WEBP medical reports & prescriptions</p>
-                    </div>
-                    <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  </label>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 font-semibold px-1">
-                    <span>Document Image Preview</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFile(null);
-                        setPreview(null);
-                        setAnalyzed(null);
-                        handleStopAudio();
-                      }}
-                      className="text-rose-500 hover:underline flex items-center space-x-1 font-bold"
-                    >
-                      <FaTimes /> <span>Remove</span>
-                    </button>
-                  </div>
-                  <div className="relative bg-slate-900/5 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-slate-700 h-[250px] flex items-center justify-center p-2.5 overflow-hidden group">
+                {preview ? (
+                  <div className="space-y-3">
                     <img
                       src={preview}
-                      alt="Document Preview"
-                      className={`max-h-[230px] max-w-full object-contain rounded-lg shadow-sm transition-all duration-300 ${uploading ? 'filter brightness-90 contrast-105' : 'group-hover:scale-105'}`}
+                      alt="Prescription preview"
+                      className="max-h-48 mx-auto rounded-xl shadow-md border border-slate-200 dark:border-slate-700 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setIsImageModalOpen(true)}
                     />
-                    
-                    {/* 🌟 ELEGANT OCR SCANNING BEAM ANIMATION */}
-                    {uploading && (
-                      <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden rounded-2xl bg-teal-950/20 backdrop-blur-[1px]">
-                        <div className="absolute left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_20px_#22d3ee] animate-ocr-scan" />
-                        <div className="absolute left-0 w-full bg-gradient-to-b from-cyan-400/20 via-teal-500/10 to-transparent animate-ocr-beam pointer-events-none" />
-                        <div className="absolute top-3 left-3 bg-teal-900/90 text-cyan-300 border border-cyan-400/40 px-3 py-1 rounded-full text-[10px] font-extrabold flex items-center space-x-2 backdrop-blur shadow-md">
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                          <span>AI Vision OCR Scanning Prescription...</span>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
+                        className="px-3 py-1 bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-400 rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-teal-200 dark:border-slate-700 hover:bg-teal-100 transition-colors"
+                      >
+                        <FaEye /> <span>View Image</span>
+                      </button>
 
-                    <a
-                      href={preview}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="absolute top-3 right-3 p-2 bg-white/90 dark:bg-[#1E293B] hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl shadow-md backdrop-blur transition-all z-30"
-                      title="View Full Resolution"
-                    >
-                      <FaEye />
-                    </a>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const imgUrl = preview || analyzed?.file_url || analyzed?.file;
+                          if (imgUrl) window.open(imgUrl, '_blank');
+                        }}
+                        className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors"
+                        title="Open document image in new tab"
+                      >
+                        <FaExternalLinkAlt className="text-xs" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-400">Click image or button to view full screen</p>
                   </div>
-                </div>
-              )}
-
-              {inlineError && (
-                <Alert type="error" message={inlineError} className="text-xs" />
-              )}
-
-              {uploading && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <span>{stageText || 'Analyzing document...'}</span>
-                    <span className="font-bold text-teal-600 dark:text-teal-400">{progress}%</span>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-slate-800 text-teal-600 dark:text-teal-400 flex items-center justify-center mx-auto text-xl group-hover:scale-110 transition-transform">
+                      <FaFileUpload />
+                    </div>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Drop prescription / lab report image here
+                    </p>
+                    <p className="text-[11px] text-slate-400">JPG, PNG, WEBP (Supports Handwritten Rx & Printed Labs)</p>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
 
-              <Button
-                type="submit"
-                variant="teal"
-                size="lg"
-                fullWidth
-                disabled={!file || uploading}
-                icon={FaMicroscope}
-                className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl py-3 shadow-md"
-              >
-                {uploading ? 'Analyzing Medical Document...' : 'Analyze Document Now'}
-              </Button>
+              {/* Action Buttons: Camera Capture + Submit */}
+              <div className="flex items-center space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraOpen(true)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs shrink-0"
+                >
+                  <FaCamera className="text-teal-500" />
+                  <span>Snap Photo</span>
+                </button>
+
+                <Button
+                  type="submit"
+                  disabled={!file || uploading}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
+                >
+                  {uploading ? (
+                    <span>Analyzing Document...</span>
+                  ) : (
+                    <>
+                      <FaRobot className="text-base" />
+                      <span>Start AI Extraction</span>
+                    </>
+                  )}
+                </Button>
+              </div>
             </form>
 
-            {/* INTEGRATED DOCKED AUDIO PLAYER CONTROL BAR */}
-            {analyzed && (analyzed.audio_script || analyzed.audio_scripts) && (
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-700 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                    <FaHeadphones className="text-teal-600" />
-                    <span>Spoken Voice Guidance Sahayak</span>
-                  </span>
-                  <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 rounded-md">
-                    {preferredLang.toUpperCase()} Voice
-                  </span>
+            {/* Progress Bar & Processing Steps */}
+            {uploading && (
+              <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <span>{stageText}</span>
+                  <span>{progress}%</span>
                 </div>
-
-                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
-                  <div className="flex items-center space-x-2">
-                    {!isPlayingAudio ? (
-                      <button
-                        type="button"
-                        onClick={speakAudioScript}
-                        className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                      >
-                        <FaPlay className="text-[10px]" /> <span>Listen Audio</span>
-                      </button>
-                    ) : isPausedAudio ? (
-                      <button
-                        type="button"
-                        onClick={handleResumeAudio}
-                        className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                      >
-                        <FaPlay className="text-[10px]" /> <span>Resume</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handlePauseAudio}
-                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all"
-                      >
-                        <FaPause className="text-[10px]" /> <span>Pause</span>
-                      </button>
-                    )}
-
-                    {isPlayingAudio && (
-                      <button
-                        type="button"
-                        onClick={handleStopAudio}
-                        className="px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all"
-                      >
-                        <FaStop className="text-[10px]" />
-                      </button>
-                    )}
-                  </div>
-
-                  <span className="text-[11px] font-bold text-teal-700 dark:text-teal-300 flex items-center space-x-1">
-                    <span className={`w-2 h-2 rounded-full ${isPlayingAudio ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
-                    <span>{isPlayingAudio ? 'Speaking...' : 'Ready'}</span>
-                  </span>
+                <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${progress}%` }}
+                  ></div>
                 </div>
               </div>
             )}
           </Card>
         </div>
 
-        {/* RIGHT COLUMN (7 Cols): Dynamic Clinical Results Workspace */}
-        <div className="lg:col-span-7 space-y-4">
-          <Card className="min-h-[560px] p-6 bg-white dark:bg-[#1E293B] border border-slate-200/80 dark:border-slate-700/80 shadow-md flex flex-col">
+        {/* RIGHT COLUMN (7 COLS): AI Extraction & Analysis Workspace */}
+        <div className="lg:col-span-7 space-y-6">
+          <Card className="p-6 bg-white dark:bg-[#1E293B] border border-slate-200/80 dark:border-slate-700 shadow-md min-h-[500px] flex flex-col justify-between">
             
-            {/* Header Tabs: Analysis | Audio Transcript | Raw OCR */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-700 shrink-0">
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setActiveTab('analysis')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                    activeTab === 'analysis'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                  }`}
-                >
-                  <FaNotesMedical />
-                  <span>Clinical Findings</span>
-                </button>
+            {/* Header Tabs: Clinical Summary / Voice Transcript / Raw OCR */}
+            {analyzed && (
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setActiveTab('analysis')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      activeTab === 'analysis'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Clinical Summary
+                  </button>
 
-                <button
-                  onClick={() => setActiveTab('audio_transcript')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                    activeTab === 'audio_transcript'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                  }`}
-                >
-                  <FaVolumeUp />
-                  <span>Audio Transcript</span>
-                </button>
+                  <button
+                    onClick={() => setActiveTab('audio_transcript')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      activeTab === 'audio_transcript'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Audio Script
+                  </button>
 
-                <button
-                  onClick={() => setActiveTab('raw_ocr')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                    activeTab === 'raw_ocr'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                  }`}
-                >
-                  <FaTable />
-                  <span>Raw OCR</span>
-                </button>
+                  <button
+                    onClick={() => setActiveTab('raw_ocr')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      activeTab === 'raw_ocr'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Raw OCR Text
+                  </button>
+                </div>
+
+                {/* Multilingual Audio Control Player */}
+                <div className="flex items-center space-x-1.5">
+                  {!isPlayingAudio ? (
+                    <button
+                      onClick={speakAudioScript}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs transition-all"
+                    >
+                      <FaPlay className="text-[10px]" /> <span>Listen Audio</span>
+                    </button>
+                  ) : isPausedAudio ? (
+                    <button
+                      onClick={handleResumeAudio}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs transition-all"
+                    >
+                      <FaPlay className="text-[10px]" /> <span>Resume</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handlePauseAudio}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center space-x-1 shadow-xs transition-all"
+                    >
+                      <FaPause className="text-[10px]" /> <span>Pause</span>
+                    </button>
+                  )}
+
+                  {isPlayingAudio && (
+                    <button
+                      onClick={handleStopAudio}
+                      className="p-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-300"
+                    >
+                      <FaStop />
+                    </button>
+                  )}
+                </div>
               </div>
-
-              {analyzed && (
-                <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  {isLabReportActive ? '📑 Lab Report' : '💊 Prescription'}
-                </span>
-              )}
-            </div>
+            )}
 
             {!analyzed ? (
               <div className="my-auto py-24 text-center text-slate-400 space-y-4">
@@ -762,6 +783,28 @@ const UploadDocument = () => {
                       {analyzed.lab_report.abnormal_count}
                     </h3>
                   </div>
+                </div>
+
+                {/* WhatsApp Share & Reminder Actions */}
+                <div className="p-3.5 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-[#1E293B] dark:to-[#172033] border border-teal-200 dark:border-slate-700 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white text-sm shadow-xs">
+                      <FaWhatsapp className="text-base" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Share Diagnostic Report</h4>
+                      <p className="text-[11px] text-slate-500">Send test results directly via WhatsApp</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleShareWhatsApp}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
+                  >
+                    <FaWhatsapp className="text-base" />
+                    <span>Share on WhatsApp</span>
+                  </button>
                 </div>
 
                 {/* Lab Test Parameter Cards List */}
@@ -836,37 +879,50 @@ const UploadDocument = () => {
               /* ======================================================== */
               <div className="pt-4 space-y-4 flex-1">
                 
-                {/* 1-Click Sync to Medication Reminders Schedule */}
-                {analyzed.medicines && analyzed.medicines.length > 0 && (
+                {/* 1-Click Sync to Medication Reminders Schedule & WhatsApp Share */}
+                {analyzed && (
                   <div className="p-3.5 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-[#1E293B] dark:to-[#172033] border border-teal-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
                     <div className="flex items-center space-x-2.5">
                       <div className="p-2 rounded-xl bg-teal-600 text-white text-sm shadow-xs">
                         <FaClock />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Set Daily Medication Reminders</h4>
-                        <p className="text-[11px] text-slate-500">Auto-create Morning, Afternoon & Night reminder alarms</p>
+                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">Prescription Actions</h4>
+                        <p className="text-[11px] text-slate-500">Share output on WhatsApp or set daily reminder alarms</p>
                       </div>
                     </div>
 
-                    {syncedCount === null ? (
+                    <div className="flex items-center space-x-2 shrink-0">
                       <button
                         type="button"
-                        onClick={handleSyncToReminders}
-                        disabled={syncingReminders}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all whitespace-nowrap"
+                        onClick={handleShareWhatsApp}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
                       >
-                        {syncingReminders ? 'Adding...' : '⏰ Set Daily Reminders'}
+                        <FaWhatsapp className="text-base" />
+                        <span>Share on WhatsApp</span>
                       </button>
-                    ) : (
-                      <a
-                        href="/patient/reminders"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
-                      >
-                        <FaCheckCircle className="text-xs" />
-                        <span>Added {syncedCount} Meds (View Reminders)</span>
-                      </a>
-                    )}
+
+                      {analyzed.medicines && analyzed.medicines.length > 0 && (
+                        syncedCount === null ? (
+                          <button
+                            type="button"
+                            onClick={handleSyncToReminders}
+                            disabled={syncingReminders}
+                            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all whitespace-nowrap"
+                          >
+                            {syncingReminders ? 'Adding...' : '⏰ Set Reminders'}
+                          </button>
+                        ) : (
+                          <a
+                            href="/patient/reminders"
+                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 whitespace-nowrap"
+                          >
+                            <FaCheckCircle className="text-xs" />
+                            <span>Added {syncedCount} Meds</span>
+                          </a>
+                        )
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -998,6 +1054,61 @@ const UploadDocument = () => {
         }}
         title="Snap Doctor Prescription / Lab Report Photo"
       />
+
+      {/* 🖼️ ORIGINAL PRESCRIPTION IMAGE FULL-SCREEN MODAL */}
+      {isImageModalOpen && (preview || analyzed?.file_url || analyzed?.file) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+          <div className="bg-white dark:bg-[#1E293B] max-w-4xl w-full rounded-3xl p-6 shadow-2xl relative border border-slate-200 dark:border-slate-700 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <FaEye className="text-teal-500 text-lg" />
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Uploaded Prescription / Document Image
+                </h3>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const imgUrl = preview || analyzed?.file_url || analyzed?.file;
+                    if (imgUrl) window.open(imgUrl, '_blank');
+                  }}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-slate-700 text-teal-700 dark:text-teal-300 rounded-xl transition-colors"
+                  title="Open image in new tab"
+                >
+                  <FaExternalLinkAlt className="text-xs" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsImageModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-colors"
+                >
+                  <FaTimes />
+                </button>
+              </div>
+            </div>
+            
+            <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-950 rounded-2xl p-3 border border-slate-800">
+              <img
+                src={preview || (analyzed?.file_url || analyzed?.file)}
+                alt="Uploaded Prescription"
+                className="max-h-[70vh] w-auto object-contain rounded-xl shadow-2xl"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setIsImageModalOpen(false)}
+                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

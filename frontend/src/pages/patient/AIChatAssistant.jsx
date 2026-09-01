@@ -20,7 +20,10 @@ import {
   FaClock, 
   FaShieldAlt, 
   FaCamera,
-  FaImage
+  FaImage,
+  FaTrash,
+  FaBolt,
+  FaExclamationTriangle
 } from 'react-icons/fa';
 
 const AIChatAssistant = () => {
@@ -40,6 +43,13 @@ const AIChatAssistant = () => {
   const [uploadingRx, setUploadingRx] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
 
+  // 📷 Image Analysis States (Medicine / Skin Analysis)
+  const [chatImage, setChatImage] = useState(null); // { file, previewUrl, b64 }
+  const [imageAnalyzing, setImageAnalyzing] = useState(false);
+  const [imageAnalysisError, setImageAnalysisError] = useState(null);
+  const [lastImageContext, setLastImageContext] = useState(null);
+  const [isAnalysisCameraOpen, setIsAnalysisCameraOpen] = useState(false);
+
   // Preferred Language: 'en', 'te', 'hi', 'mr'
   const [lang, setLang] = useState(() => {
     return localStorage.getItem('preferred_language') || 'en';
@@ -51,6 +61,7 @@ const AIChatAssistant = () => {
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const chatFileInputRef = useRef(null);
   const recognitionRef = useRef(null);
 
   // Auto-scroll to bottom of chat
@@ -163,6 +174,7 @@ const AIChatAssistant = () => {
       const res = await api.post('/api/documents/chat/', {
         messages: newHistory.map(m => ({ sender: m.sender, text: m.text })),
         prescription_context: prescriptionContext,
+        image_context: lastImageContext,
         lang: lang,
       });
 
@@ -185,6 +197,85 @@ const AIChatAssistant = () => {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Option 1 — Click Image Camera Capture Handler
+  const handleCameraCapturedImage = (file, dataUrl) => {
+    setImageAnalysisError(null);
+    setChatImage({
+      file: file,
+      previewUrl: dataUrl || URL.createObjectURL(file),
+      b64: dataUrl
+    });
+    setIsAnalysisCameraOpen(false);
+  };
+
+  // Option 2 — Upload Image File Picker Handler
+  const handleChatFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageAnalysisError(null);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setChatImage({
+        file: file,
+        previewUrl: event.target.result,
+        b64: event.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+    // Reset file input value so re-selecting same file works
+    e.target.value = '';
+  };
+
+  // Trigger Image Vision Analysis Endpoint
+  const handleAnalyzeChatImage = async () => {
+    if (!chatImage) return;
+
+    setImageAnalyzing(true);
+    setImageAnalysisError(null);
+
+    try {
+      const formData = new FormData();
+      if (chatImage.file) {
+        formData.append('image', chatImage.file);
+      } else if (chatImage.b64) {
+        formData.append('image_b64', chatImage.b64);
+      }
+      formData.append('lang', lang);
+
+      const res = await api.post('/api/documents/analyze-image/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const analysisText = res.data?.analysis || res.data?.response || 'Analysis completed.';
+
+      // Add user message with image preview to conversation
+      const userMsg = {
+        id: Date.now(),
+        sender: 'user',
+        text: '📷 [Uploaded Image for Analysis]',
+        imagePreview: chatImage.previewUrl
+      };
+
+      // Add AI analysis result to conversation
+      const aiMsg = {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: analysisText,
+        isPharmacology: true
+      };
+
+      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setLastImageContext(analysisText);
+      setChatImage(null);
+    } catch (err) {
+      console.error('Image analysis request error:', err);
+      setImageAnalysisError('Failed to analyze the image. Please check your internet connection or try again.');
+    } finally {
+      setImageAnalyzing(false);
     }
   };
 
@@ -399,7 +490,7 @@ const AIChatAssistant = () => {
           </div>
         </div>
 
-        {/* 📷 Live Camera & 📁 Upload File Action Buttons */}
+        {/* 📷 Live Camera & 📁 Upload File Action Buttons for Prescription OCR */}
         <div className="flex items-center space-x-2 shrink-0">
           <input
             type="file"
@@ -415,7 +506,7 @@ const AIChatAssistant = () => {
             className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
           >
             <FaCamera className="text-xs" />
-            <span>Open Camera</span>
+            <span>Scan Rx</span>
           </button>
 
           <button
@@ -425,9 +516,139 @@ const AIChatAssistant = () => {
             className="px-3 py-1.5 bg-white dark:bg-[#1E293B] hover:bg-teal-50 dark:hover:bg-slate-700 border border-teal-200 dark:border-slate-700 text-teal-700 dark:text-teal-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-xs"
           >
             {uploadingRx ? <FaSpinner className="animate-spin text-xs" /> : <FaFileUpload className="text-xs" />}
-            <span>{uploadingRx ? 'Scanning...' : 'Upload File'}</span>
+            <span>{uploadingRx ? 'Scanning...' : 'Upload Rx File'}</span>
           </button>
         </div>
+      </div>
+
+      {/* 🔍 AI VISION IMAGE ANALYSIS FEATURE (MEDICINE / SKIN ANALYSIS) */}
+      <div className="p-4 bg-gradient-to-r from-indigo-900/10 via-teal-900/10 to-indigo-900/10 dark:bg-slate-800/80 border border-indigo-200/80 dark:border-indigo-900/60 rounded-2xl space-y-3 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-sm shrink-0 shadow-xs">
+              <FaImage />
+            </div>
+            <div>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
+                <span>AI Image Analysis (Medicine & Skin Diagnostics)</span>
+                <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-full">Vision AI</span>
+              </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Capture or upload tablet packaging or skin conditions for AI identification
+              </p>
+            </div>
+          </div>
+
+          {/* Hidden File Input for Image Analysis */}
+          <input
+            type="file"
+            ref={chatFileInputRef}
+            onChange={handleChatFileSelected}
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+          />
+
+          {/* TWO EXPLICIT OPTIONS: Click an Image & Upload Image */}
+          <div className="flex items-center space-x-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setIsAnalysisCameraOpen(true)}
+              className="flex-1 sm:flex-none px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all shadow-xs active:scale-95"
+            >
+              <FaCamera className="text-xs" />
+              <span>📷 Click an Image</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => chatFileInputRef.current?.click()}
+              className="flex-1 sm:flex-none px-3.5 py-2 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-slate-700 border border-indigo-300 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all shadow-xs active:scale-95"
+            >
+              <FaImage className="text-xs" />
+              <span>🖼️ Upload Image</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Selected Image Preview & Action Controls */}
+        {chatImage && (
+          <div className="mt-3 p-3 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/60 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
+              <img
+                src={chatImage.previewUrl}
+                alt="Selected preview"
+                className="w-16 h-16 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+              />
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                  Image Ready for Analysis
+                </span>
+                <span className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold block">
+                  Medicine Identification / Skin Presentation
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                disabled={imageAnalyzing}
+                onClick={() => {
+                  setChatImage(null);
+                  setImageAnalysisError(null);
+                }}
+                className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 border border-rose-200 dark:border-rose-900/60 text-xs font-bold rounded-xl flex items-center space-x-1 transition-all"
+              >
+                <FaTrash className="text-xs" />
+                <span>Remove / Retake</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={imageAnalyzing}
+                onClick={handleAnalyzeChatImage}
+                className="px-4 py-1.5 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center space-x-1.5 shadow-md transition-all active:scale-95"
+              >
+                {imageAnalyzing ? (
+                  <>
+                    <FaSpinner className="animate-spin text-xs" />
+                    <span>Analyzing Image...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaBolt className="text-xs" />
+                    <span>Analyze Image</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Spinner Indicator */}
+        {imageAnalyzing && (
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900 rounded-xl text-xs text-indigo-800 dark:text-indigo-200 flex items-center space-x-2">
+            <FaSpinner className="animate-spin text-indigo-600 text-sm shrink-0" />
+            <span className="font-semibold">Analyzing image with AI Vision (Medicine identification / Skin condition)...</span>
+          </div>
+        )}
+
+        {/* Error Alert Indicator */}
+        {imageAnalysisError && (
+          <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <FaExclamationTriangle className="text-rose-600 text-sm shrink-0" />
+              <span>{imageAnalysisError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleAnalyzeChatImage}
+              className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 💬 Suggested Quick Inquiry Chips */}
@@ -477,6 +698,14 @@ const AIChatAssistant = () => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-none border border-slate-200/60 dark:border-slate-700 shadow-xs'
                   }`}
                 >
+                  {/* Optional Image Thumbnail Preview inside User Chat Bubble */}
+                  {msg.imagePreview && (
+                    <img
+                      src={msg.imagePreview}
+                      alt="Uploaded for analysis"
+                      className="max-w-[200px] max-h-[150px] rounded-xl object-cover mb-2 border border-white/30 shadow-sm"
+                    />
+                  )}
                   {msg.text}
                 </div>
 
@@ -532,9 +761,9 @@ const AIChatAssistant = () => {
             {/* Live Camera Button */}
             <button
               type="button"
-              onClick={() => setIsCameraOpen(true)}
+              onClick={() => setIsAnalysisCameraOpen(true)}
               className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-400 rounded-2xl transition-all shadow-xs"
-              title="Take Photo with Camera"
+              title="Click an Image for AI Vision Analysis"
             >
               <FaCamera className="text-base" />
             </button>
@@ -577,12 +806,20 @@ const AIChatAssistant = () => {
 
       </Card>
 
-      {/* 📷 Live Camera Capture Modal */}
+      {/* 📷 Prescription OCR Camera Capture Modal */}
       <CameraCaptureModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={(file) => processPrescriptionFile(file)}
         title="Snap Doctor Prescription / Lab Report Photo"
+      />
+
+      {/* 📷 AI Image Analysis Camera Capture Modal (Option 1) */}
+      <CameraCaptureModal
+        isOpen={isAnalysisCameraOpen}
+        onClose={() => setIsAnalysisCameraOpen(false)}
+        onCapture={(file, dataUrl) => handleCameraCapturedImage(file, dataUrl)}
+        title="Click / Capture Medicine or Skin Image for AI Analysis"
       />
 
     </div>

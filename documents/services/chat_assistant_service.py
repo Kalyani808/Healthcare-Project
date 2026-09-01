@@ -195,7 +195,136 @@ class AIChatService:
             )
 
     @classmethod
-    def generate_chat_response(cls, messages_history, prescription_context=None, user=None, lang="en"):
+    def analyze_chat_image(cls, image_bytes_or_b64, mime_type="image/jpeg", lang="en"):
+        """
+        Analyzes a patient-provided image (captured or uploaded) inside Health Sahayak Bot.
+        Determines whether it is a medicine/tablet/package image or a skin/face presentation image.
+        Uses OpenRouter Vision API (or graceful clinical fallback).
+        """
+        start_t = time.time()
+        import base64
+
+        lang_names = {'te': 'Telugu', 'hi': 'Hindi', 'mr': 'Marathi', 'en': 'English'}
+        lang_name = lang_names.get((lang or 'en').lower(), 'English')
+
+        if isinstance(image_bytes_or_b64, bytes):
+            b64_str = base64.b64encode(image_bytes_or_b64).decode('utf-8')
+        else:
+            b64_str = str(image_bytes_or_b64)
+            if b64_str.startswith('data:'):
+                header, b64_str = b64_str.split(',', 1)
+                if 'image/png' in header: mime_type = 'image/png'
+                elif 'image/webp' in header: mime_type = 'image/webp'
+                elif 'image/jpeg' in header or 'image/jpg' in header: mime_type = 'image/jpeg'
+
+        data_url = f"data:{mime_type};base64,{b64_str}"
+
+        analysis_prompt = f"""You are SevaHealth AI Sahayak, a professional medical image analysis assistant helping a patient in India.
+
+Examine the provided image carefully and perform ONE of two diagnostic tasks:
+
+TASK CLASSIFICATION:
+Determine if the image is:
+A. MEDICINE IMAGE (tablet, capsule, blister pack, syrup bottle, ointment tube, medicine packaging/box)
+B. SKIN / FACE PRESENTATION IMAGE (skin condition, rash, lesion, acne, redness, swelling, mole, facial dermatological presentation)
+
+IF A (MEDICINE IMAGE):
+1. **Identification**: Identify the medicine name clearly (or state uncertainty if unreadable/partially visible).
+2. **Composition & Generic Name**: State active generic compounds (e.g. Paracetamol, Amoxicillin, Aceclofenac + Serratiopeptidase).
+3. **Form & Category**: e.g. Tablet / Capsule / Syrup / Ointment, Antibiotic / NSAID / Antacid / Antihistamine.
+4. **Common Uses**: Explain what this medication is prescribed for in patient-friendly terms.
+5. **Dosage & Food Timing**: State general food timing (e.g., after meals, empty stomach) and standard usage safety precautions.
+6. **Uncertainty Warning**: If details are ambiguous or blurry, explicitly mention that the patient should check the physical packaging or consult a pharmacist.
+
+IF B (SKIN / FACE PRESENTATION IMAGE):
+1. **Visible Presentation**: Describe what is visually observable (e.g. erythematous rash, papules, dry scaling, hyperpigmentation, inflammation).
+2. **Likely Condition / Category**: Provide plausible non-definitive category or conditions (e.g., Contact Dermatitis, Eczema, Acne Vulgaris, Urticaria, Fungal Infection).
+3. **Severity Assessment**: Mild, Moderate, or Requires Prompt Clinical Care.
+4. **Possible Causes**: Triggers, allergens, environmental factors, or infections.
+5. **General Care Guidance**: Safe, gentle home care measures (e.g. keep clean, avoid scratching, apply mild moisturizer or cold compress).
+6. **When to Consult Doctor**: Clear red flags when to see a dermatologist or physician immediately.
+7. **Clinical Disclaimer**: STRICTLY INCLUDE THIS STATEMENT: "Note: This image analysis is for educational and guidance purposes only and does NOT constitute a definitive medical diagnosis. Please consult a qualified doctor or dermatologist for formal medical evaluation."
+
+INSTRUCTIONS:
+- Language: Respond in {lang_name}.
+- Format: Use clean, structured Markdown with appropriate medical emoji headers.
+- Keep explanations clear, compassionate, and patient-friendly.
+"""
+
+        vision_model = config("OPENROUTER_VISION_MODEL", default=os.getenv("OPENROUTER_CHAT_MODEL", "openai/gpt-4o-mini"))
+        
+        if OPENROUTER_API_KEY:
+            try:
+                payload = {
+                    "model": vision_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": analysis_prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": data_url}
+                                }
+                            ]
+                        }
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 1000
+                }
+
+                req = urllib.request.Request(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                )
+
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        reply = data["choices"][0]["message"]["content"].strip()
+                        
+                        reply_lower = reply.lower()
+                        is_med = "medicine" in reply_lower or "tablet" in reply_lower or "capsule" in reply_lower or "dose" in reply_lower
+                        is_skin = "skin" in reply_lower or "rash" in reply_lower or "dermatitis" in reply_lower or "face" in reply_lower
+                        
+                        image_type = "medicine" if is_med and not is_skin else ("skin" if is_skin else "general")
+
+                        return {
+                            "status": "success",
+                            "image_type": image_type,
+                            "analysis": reply,
+                            "response": reply,
+                            "model": f"openrouter/{vision_model}",
+                            "duration": round(time.time() - start_t, 2)
+                        }
+            except Exception as e:
+                logger.warning(f"[IMAGE ANALYSIS OPENROUTER WARN] Vision API failed: {e}")
+
+        # Graceful fallback response if API key is absent or OpenRouter call fails
+        if lang in ["te", "telugu"]:
+            fallback_msg = "📷 **చిత్ర విశ్లేషణ సిద్ధంగా ఉంది:**\n\nదయచేసి మీ మందులు లేదా చర్మ సమస్యల గురించిన ప్రశ్నను డైరెక్ట్‌గా హెల్త్ సహాయక్‌ను అడగండి."
+        elif lang in ["hi", "hindi"]:
+            fallback_msg = "📷 **इमेज विश्लेषण उपलब्ध है:**\n\nकृपया अपनी दवा या त्वचा की समस्या के बारे में अपना प्रश्न सीधे हेल्थ सहायक से पूछें।"
+        elif lang in ["mr", "marathi"]:
+            fallback_msg = "📷 **प्रतिमा विश्लेषण उपलब्ध आहे:**\n\nकृपया तुमच्या औषधांबद्दल किंवा त्वचेच्या समस्येबद्दल तुमचा प्रश्न थेट हेल्थ सहाय्यकला विचारा."
+        else:
+            fallback_msg = "📷 **Image Analysis Completed:**\n\nPlease consult your physician or pharmacist regarding this image, or ask Health Sahayak your specific follow-up questions directly."
+
+        return {
+            "status": "fallback",
+            "image_type": "unknown",
+            "analysis": fallback_msg,
+            "response": fallback_msg,
+            "model": "seva-clinical-fallback",
+            "duration": round(time.time() - start_t, 2)
+        }
+
+    @classmethod
+    def generate_chat_response(cls, messages_history, prescription_context=None, user=None, lang="en", image_context=None):
         start_t = time.time()
         
         lang_names = {'te': 'Telugu', 'hi': 'Hindi', 'mr': 'Marathi', 'en': 'English'}
@@ -254,10 +383,11 @@ class AIChatService:
         # Build dynamic clinical system prompt with patient safety guardrails
         custom_system_prompt = f"""You are SevaHealth AI Sahayak, a professional medical information assistant helping a patient understand their healthcare information.
 
-You have three core responsibilities:
+You have four core responsibilities:
 1. Answer questions about the patient's latest completed prescription using the provided prescription context below.
-2. Provide verified healthcare provider and doctor referral information using the provided database provider context below.
-3. Answer general medical and health-information questions using your general medical knowledge.
+2. Answer questions about any recent medicine or skin/face image analyzed in this chat session using the image analysis context below.
+3. Provide verified healthcare provider and doctor referral information using the provided database provider context below.
+4. Answer general medical and health-information questions using your general medical knowledge.
 
 PRESCRIPTION RULES:
 - When the patient asks about their medicines, dosage, frequency, duration, timing, or instructions, use the supplied prescription context.
@@ -269,6 +399,10 @@ PRESCRIPTION RULES:
 - Do not modify or rewrite the patient's prescription.
 - Do not create a new prescription.
 - Do not change the doctor's dosage instructions.
+
+IMAGE ANALYSIS & FOLLOW-UP RULES:
+- When the patient asks follow-up questions about a medicine image or skin presentation image analyzed in this conversation, refer to the image analysis context and conversation history.
+- The image analysis context must NOT overwrite or replace the patient's prescription context.
 
 VERIFIED DOCTOR & REFERRAL RULES:
 - When the patient asks about doctors, specialists, hospital directions, availability, or referrals, use ONLY the verified provider/referral database context provided below.
@@ -299,6 +433,9 @@ SAFETY:
             custom_system_prompt += f"\n\nPATIENT'S LATEST COMPLETED PRESCRIPTION CONTEXT:\n{json.dumps(prescription_context, indent=2)}"
         else:
             custom_system_prompt += "\n\nPATIENT'S LATEST COMPLETED PRESCRIPTION CONTEXT: No completed prescription available for this patient."
+
+        if image_context:
+            custom_system_prompt += f"\n\nPATIENT'S RECENT CHAT IMAGE ANALYSIS CONTEXT:\n{image_context}"
 
         # Format last 10 messages for conversation history context
         formatted_messages = [{"role": "system", "content": custom_system_prompt}]

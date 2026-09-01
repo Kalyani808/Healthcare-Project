@@ -26,7 +26,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['transcribe_voice', 'speak_text', 'ai_chat'] or self.request.path.startswith('/api/voice/transcribe') or self.request.path.startswith('/api/chat'):
+        if self.action in ['transcribe_voice', 'speak_text', 'ai_chat', 'analyze_chat_image'] or self.request.path.startswith('/api/voice/transcribe') or self.request.path.startswith('/api/chat'):
             return [permissions.AllowAny()]
         return super().get_permissions()
 
@@ -338,6 +338,33 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(result, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['post'], url_path='analyze-image', permission_classes=[permissions.AllowAny])
+    def analyze_chat_image(self, request):
+        """
+        POST /api/documents/analyze-image/ (or /api/chat/analyze-image/)
+        Analyzes a captured or uploaded image (medicine or skin/face) for Health Sahayak Bot.
+        """
+        image_file = request.FILES.get('image') or request.FILES.get('file')
+        b64_image = request.data.get('image_b64') or request.data.get('image_data')
+        lang = request.data.get('lang', 'en').lower()
+
+        if not image_file and not b64_image:
+            return Response(
+                {"status": "error", "error": "No image file or base64 data provided in request."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if image_file:
+            image_data = image_file.read()
+            mime_type = image_file.content_type or "image/jpeg"
+        else:
+            image_data = b64_image
+            mime_type = "image/jpeg"
+
+        from .services.chat_assistant_service import AIChatService
+        result = AIChatService.analyze_chat_image(image_data, mime_type=mime_type, lang=lang)
+        return Response(result, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], url_path='chat', permission_classes=[permissions.AllowAny])
     def ai_chat(self, request):
         """
@@ -355,6 +382,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             )
 
         prescription_context = request.data.get('prescription_context')
+        image_context = request.data.get('image_context') or request.data.get('image_analysis_context')
         lang = request.data.get('lang', 'en').lower()
         if lang.startswith('te'): lang = 'te'
         elif lang.startswith('hi'): lang = 'hi'
@@ -384,6 +412,7 @@ class MedicalDocumentViewSet(viewsets.ModelViewSet):
             messages_history=messages_history,
             prescription_context=prescription_context,
             user=request.user if request.user.is_authenticated else None,
-            lang=lang
+            lang=lang,
+            image_context=image_context
         )
         return Response(result, status=status.HTTP_200_OK)

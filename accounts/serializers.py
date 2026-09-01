@@ -15,6 +15,9 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(source='user.last_name', required=False, allow_blank=True)
     full_name = serializers.SerializerMethodField()
     username = serializers.CharField(source='user.username', read_only=True)
+    age = serializers.ReadOnlyField()
+    bmi = serializers.ReadOnlyField()
+    bmi_category = serializers.ReadOnlyField()
 
     def get_full_name(self, obj):
         fname = (obj.user.first_name or '').strip()
@@ -27,10 +30,10 @@ class PatientProfileSerializer(serializers.ModelSerializer):
         model = PatientProfile
         fields = [
             'id', 'user', 'username', 'email', 'phone_number', 'first_name', 'last_name', 'full_name',
-            'date_of_birth', 'gender', 'address', 'village_town',
-            'district', 'state', 'emergency_contact_name', 'emergency_contact_number'
+            'date_of_birth', 'gender', 'height_cm', 'weight_kg', 'blood_group', 'age', 'bmi', 'bmi_category',
+            'address', 'village_town', 'district', 'state', 'emergency_contact_name', 'emergency_contact_number'
         ]
-        read_only_fields = ('id', 'user')
+        read_only_fields = ('id', 'user', 'age', 'bmi', 'bmi_category')
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})

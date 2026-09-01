@@ -236,7 +236,7 @@ const Navbar = () => {
                     setConsultMenuOpen(false);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                    isActive('/patient/reminders') || isActive('/patient/recommendations') || isActive('/patient/education')
+                    isActive('/patient/reminders') || isActive('/patient/recommendations') || isActive('/patient/education') || isActive('/patient/ai-assistant')
                       ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-slate-700'
                       : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
@@ -251,6 +251,16 @@ const Navbar = () => {
                     <div className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
                       Adherence & Guidance
                     </div>
+                    <Link
+                      to="/patient/ai-assistant"
+                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <FaRobot className="text-teal-600" />
+                      <div>
+                        <span className="block">Voice Health Sahayak</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Regional AI symptom chat & vision</span>
+                      </div>
+                    </Link>
                     <Link
                       to="/patient/reminders"
                       className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
@@ -286,7 +296,7 @@ const Navbar = () => {
               </div>
             )}
 
-            {/* 🩺 SUITE 3: Consultations & AI Assistant Dropdown */}
+            {/* 🩺 SUITE 3: Consultations Dropdown */}
             {isAuthenticated && role === 'patient' && (
               <div className="relative">
                 <button
@@ -296,7 +306,7 @@ const Navbar = () => {
                     setDailyCareMenuOpen(false);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                    isActive('/patient/appointments') || isActive('/patient/ai-assistant')
+                    isActive('/patient/appointments') || isActive('/patient/referrals')
                       ? 'bg-teal-50 dark:bg-slate-800 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-slate-700'
                       : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
@@ -329,16 +339,6 @@ const Navbar = () => {
                       <div>
                         <span className="block">Doctor Referrals & Finder</span>
                         <span className="block text-[10px] text-slate-400 font-normal">Verified urban specialists network</span>
-                      </div>
-                    </Link>
-                    <Link
-                      to="/patient/ai-assistant"
-                      className="flex items-center space-x-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <FaRobot className="text-teal-600" />
-                      <div>
-                        <span className="block">Voice Health Sahayak</span>
-                        <span className="block text-[10px] text-slate-400 font-normal">Regional AI symptom chat</span>
                       </div>
                     </Link>
                   </div>
@@ -500,6 +500,7 @@ const Navbar = () => {
               <Link to="/patient/health-reports" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Health Test Reports</Link>
               
               <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Daily Care</div>
+              <Link to="/patient/ai-assistant" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400">Voice Health Sahayak</Link>
               <Link to="/patient/reminders" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400">Medication Reminders</Link>
               <Link to="/patient/recommendations" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400">AI Health Guidance</Link>
               <Link to="/patient/education" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 dark:text-blue-400">Health Education Guides</Link>
@@ -507,7 +508,6 @@ const Navbar = () => {
               <div className="text-[10px] font-black uppercase text-slate-400 px-3 pt-2">Medical Support</div>
               <Link to="/patient/appointments" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Doctor Appointments</Link>
               <Link to="/patient/referrals" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400">Doctor Referrals & Finder</Link>
-              <Link to="/patient/ai-assistant" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200">Voice Health Sahayak</Link>
               <Link to="/patient/emergency" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-rose-600">🚨 Emergency 108</Link>
               <button onClick={() => { setMobileMenuOpen(false); handleLogout(); }} className="block w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-rose-600">Sign Out</button>
             </div>

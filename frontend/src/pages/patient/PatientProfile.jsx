@@ -19,7 +19,11 @@ import {
   FaCheckCircle,
   FaEnvelope,
   FaArrowLeft,
-  FaShieldAlt
+  FaShieldAlt,
+  FaWeightHanging,
+  FaRulerVertical,
+  FaHeartbeat,
+  FaTint
 } from 'react-icons/fa';
 
 const PatientProfile = () => {
@@ -40,11 +44,45 @@ const PatientProfile = () => {
     email: user?.email || 'ramesh_kumar@sevahealth.org',
     date_of_birth: '1992-06-15',
     gender: 'Male',
+    height_cm: '172',
+    weight_kg: '68',
+    blood_group: 'O+',
     language_preference: 'Hindi',
     emergency_contact: '+91 98123 45678',
     village: 'Sundarpur Village, Dist. Varanasi',
     allergies: 'Penicillin allergy',
   });
+
+  // Calculate live age from Date of Birth
+  const calculateAge = (dobString) => {
+    if (!dobString) return null;
+    const birthDate = new Date(dobString);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
+  };
+
+  // Calculate live BMI from Weight (kg) and Height (cm)
+  const calculateBMI = (weightKg, heightCm) => {
+    const w = parseFloat(weightKg);
+    const h = parseFloat(heightCm);
+    if (!w || !h || h <= 0) return { bmi: null, category: '' };
+    const heightM = h / 100;
+    const bmiVal = (w / (heightM * heightM)).toFixed(1);
+    let category = '';
+    if (bmiVal < 18.5) category = 'Underweight';
+    else if (bmiVal < 25.0) category = 'Normal Weight';
+    else if (bmiVal < 30.0) category = 'Overweight';
+    else category = 'Obese';
+    return { bmi: bmiVal, category };
+  };
+
+  const computedAge = calculateAge(profile.date_of_birth);
+  const computedBMI = calculateBMI(profile.weight_kg, profile.height_cm);
 
   // Listen to URL search param changes
   useEffect(() => {
@@ -68,6 +106,9 @@ const PatientProfile = () => {
             email: data.email || user?.email || prev.email,
             date_of_birth: data.date_of_birth || prev.date_of_birth,
             gender: data.gender === 'F' ? 'Female' : data.gender === 'O' ? 'Other' : 'Male',
+            height_cm: data.height_cm ? String(data.height_cm) : prev.height_cm,
+            weight_kg: data.weight_kg ? String(data.weight_kg) : prev.weight_kg,
+            blood_group: data.blood_group || prev.blood_group,
             language_preference: 'Hindi',
             emergency_contact: data.emergency_contact_number || prev.emergency_contact,
             village: data.village_town || data.address || prev.village,
@@ -93,6 +134,9 @@ const PatientProfile = () => {
       email: profile.email,
       date_of_birth: profile.date_of_birth ? profile.date_of_birth : null,
       gender: profile.gender === 'Female' ? 'F' : profile.gender === 'Other' ? 'O' : 'M',
+      height_cm: profile.height_cm ? parseFloat(profile.height_cm) : null,
+      weight_kg: profile.weight_kg ? parseFloat(profile.weight_kg) : null,
+      blood_group: profile.blood_group,
       address: profile.village,
       village_town: profile.village,
       emergency_contact_number: profile.emergency_contact,
@@ -144,8 +188,8 @@ const PatientProfile = () => {
             </div>
             <p className="text-slate-500 dark:text-slate-400 text-xs">
               {isEditing 
-                ? 'Update your personal details below and click Save Changes' 
-                : 'Your profile details are locked in read-only mode to prevent accidental changes'}
+                ? 'Update your personal & clinical metrics below and click Save Changes' 
+                : 'Your clinical vitals and profile details are used for personalized AI medication safety'}
             </p>
           </div>
         </div>
@@ -180,7 +224,7 @@ const PatientProfile = () => {
         </div>
       </div>
 
-      {saved && <Alert type="success" message="Profile updated successfully in your local health vault!" />}
+      {saved && <Alert type="success" message="Profile & clinical metrics updated successfully!" />}
       {error && <Alert type="error" message={error} />}
 
       <Card className="space-y-6">
@@ -195,13 +239,67 @@ const PatientProfile = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">{profile.full_name}</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Patient ID: SH-89421 • Village Member</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Patient ID: SH-89421 • {computedAge ? `${computedAge} Years Old` : 'Age Verified'}
+                  </p>
                 </div>
               </div>
               <span className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold flex items-center space-x-1">
                 <FaShieldAlt className="text-health-500" />
-                <span>Verified Account</span>
+                <span>Verified Patient</span>
               </span>
+            </div>
+
+            {/* 🏥 PHYSICAL VITALS & DOSAGE METRICS CARD */}
+            <div className="p-4 bg-gradient-to-r from-teal-500/10 via-indigo-500/10 to-teal-500/10 dark:bg-slate-800/90 border border-teal-200/80 dark:border-slate-700 rounded-2xl space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-400 flex items-center space-x-1.5">
+                  <FaHeartbeat className="text-teal-600 text-sm" />
+                  <span>Clinical Vitals & Prescription Metrics</span>
+                </span>
+                {computedBMI.bmi && (
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                    computedBMI.category === 'Normal Weight'
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                      : computedBMI.category === 'Underweight'
+                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                      : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
+                  }`}>
+                    BMI: {computedBMI.bmi} ({computedBMI.category})
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 font-semibold block text-[10px] uppercase">Age (Calculated)</span>
+                  <span className="text-sm font-black text-slate-800 dark:text-slate-100">
+                    {computedAge !== null ? `${computedAge} Years` : 'Not Set'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 font-semibold block text-[10px] uppercase">Body Weight</span>
+                  <span className="text-sm font-black text-slate-800 dark:text-slate-100">
+                    {profile.weight_kg ? `${profile.weight_kg} kg` : 'Not Set'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 font-semibold block text-[10px] uppercase">Height</span>
+                  <span className="text-sm font-black text-slate-800 dark:text-slate-100">
+                    {profile.height_cm ? `${profile.height_cm} cm` : 'Not Set'}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 font-semibold block text-[10px] uppercase">Blood Group</span>
+                  <span className="text-sm font-black text-rose-600 dark:text-rose-400 flex items-center space-x-1">
+                    <FaTint className="text-xs" />
+                    <span>{profile.blood_group || 'O+'}</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Read-Only Details Grid */}
@@ -241,9 +339,11 @@ const PatientProfile = () => {
               <div className="p-4 rounded-2xl bg-white dark:bg-[#1E293B] border border-slate-100 dark:border-slate-700/80 space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 flex items-center space-x-1.5">
                   <FaCalendarAlt className="text-slate-400" />
-                  <span>Date of Birth</span>
+                  <span>Date of Birth & Age</span>
                 </span>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{profile.date_of_birth || '1992-06-15'}</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {profile.date_of_birth || '1992-06-15'} {computedAge ? `(${computedAge} yrs)` : ''}
+                </p>
               </div>
 
               <div className="p-4 rounded-2xl bg-white dark:bg-[#1E293B] border border-slate-100 dark:border-slate-700/80 space-y-1">
@@ -282,7 +382,7 @@ const PatientProfile = () => {
             {/* Bottom edit shortcut banner */}
             <div className="p-4 bg-health-50 dark:bg-[#1E293B] rounded-2xl border border-health-100 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <span className="text-health-800 dark:text-slate-200 font-medium">
-                Need to update your mobile number, address, or emergency contacts?
+                Need to update your vitals, weight, height, or contact details?
               </span>
               <button
                 type="button"
@@ -334,15 +434,76 @@ const PatientProfile = () => {
               />
             </div>
 
+            {/* 🏥 CLINICAL VITALS SECTION */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center space-x-1.5">
+                  <FaHeartbeat />
+                  <span>Physical Vitals & Clinical Metrics (Dosage Calculations)</span>
+                </h3>
+                {computedBMI.bmi && (
+                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                    Live BMI: {computedBMI.bmi} ({computedBMI.category})
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Height (in cm)"
+                  type="number"
+                  placeholder="e.g. 172"
+                  icon={FaRulerVertical}
+                  value={profile.height_cm}
+                  onChange={(e) => setProfile({ ...profile, height_cm: e.target.value })}
+                />
+                <Input
+                  label="Weight (in kg)"
+                  type="number"
+                  placeholder="e.g. 68"
+                  icon={FaWeightHanging}
+                  value={profile.weight_kg}
+                  onChange={(e) => setProfile({ ...profile, weight_kg: e.target.value })}
+                />
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
+                    Blood Group
+                  </label>
+                  <select
+                    value={profile.blood_group}
+                    onChange={(e) => setProfile({ ...profile, blood_group: e.target.value })}
+                    className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500 dark:focus:border-health-400 font-medium"
+                  >
+                    <option value="O+">O Positive (O+)</option>
+                    <option value="O-">O Negative (O-)</option>
+                    <option value="A+">A Positive (A+)</option>
+                    <option value="A-">A Negative (A-)</option>
+                    <option value="B+">B Positive (B+)</option>
+                    <option value="B-">B Negative (B-)</option>
+                    <option value="AB+">AB Positive (AB+)</option>
+                    <option value="AB-">AB Negative (AB-)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Date of Birth"
-                type="date"
-                icon={FaCalendarAlt}
-                value={profile.date_of_birth}
-                onChange={(e) => setProfile({ ...profile, date_of_birth: e.target.value })}
-                required
-              />
+              <div>
+                <Input
+                  label="Date of Birth"
+                  type="date"
+                  icon={FaCalendarAlt}
+                  value={profile.date_of_birth}
+                  onChange={(e) => setProfile({ ...profile, date_of_birth: e.target.value })}
+                  required
+                />
+                {computedAge !== null && (
+                  <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400 mt-1 block">
+                    ⚡ Auto-Calculated Age: {computedAge} years
+                  </span>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                   Gender
@@ -350,13 +511,14 @@ const PatientProfile = () => {
                 <select
                   value={profile.gender}
                   onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
-                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500 dark:focus:border-health-400"
+                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500 dark:focus:border-health-400 font-medium"
                 >
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
+
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wide uppercase">
                   Preferred Language
@@ -364,7 +526,7 @@ const PatientProfile = () => {
                 <select
                   value={profile.language_preference}
                   onChange={(e) => setProfile({ ...profile, language_preference: e.target.value })}
-                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500 dark:focus:border-health-400"
+                  className="w-full py-3 px-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 focus:outline-none focus:border-health-500 dark:focus:border-health-400 font-medium"
                 >
                   <option value="Hindi">Hindi</option>
                   <option value="Punjabi">Punjabi</option>
@@ -391,7 +553,7 @@ const PatientProfile = () => {
                 rows="3"
                 value={profile.allergies}
                 onChange={(e) => setProfile({ ...profile, allergies: e.target.value })}
-                className="w-full p-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-health-500 dark:focus:border-health-400"
+                className="w-full p-4 text-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-health-500 dark:focus:border-health-400 font-medium"
               ></textarea>
             </div>
 

@@ -437,6 +437,30 @@ SAFETY:
         if image_context:
             custom_system_prompt += f"\n\nPATIENT'S RECENT CHAT IMAGE ANALYSIS CONTEXT:\n{image_context}"
 
+        # Inject Patient Physical Vitals (Age, Weight, Height, BMI) if available
+        if user and user.is_authenticated:
+            try:
+                patient_profile = getattr(user, 'patient_profile', None)
+                if patient_profile:
+                    vitals_info = []
+                    if patient_profile.age is not None:
+                        vitals_info.append(f"Age: {patient_profile.age} yrs")
+                    if patient_profile.gender:
+                        vitals_info.append(f"Gender: {patient_profile.get_gender_display()}")
+                    if patient_profile.weight_kg:
+                        vitals_info.append(f"Weight: {patient_profile.weight_kg} kg")
+                    if patient_profile.height_cm:
+                        vitals_info.append(f"Height: {patient_profile.height_cm} cm")
+                    if patient_profile.bmi:
+                        vitals_info.append(f"BMI: {patient_profile.bmi} ({patient_profile.bmi_category})")
+                    if patient_profile.blood_group:
+                        vitals_info.append(f"Blood Group: {patient_profile.blood_group}")
+
+                    if vitals_info:
+                        custom_system_prompt += f"\n\nPATIENT PHYSICAL PROFILE & VITALS:\n" + " | ".join(vitals_info)
+            except Exception as ve:
+                logger.warning(f"Failed to fetch patient profile vitals for AI prompt: {ve}")
+
         # Format last 10 messages for conversation history context
         formatted_messages = [{"role": "system", "content": custom_system_prompt}]
         for msg in (messages_history or [])[-10:]:
